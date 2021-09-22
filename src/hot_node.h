@@ -1,16 +1,21 @@
 #pragma once
 
 #include "inner_node.h"
+#include "nvm_allocator.h"
 
 class HotNode : public InnerNode {
  private:
-  btree *bt;
-  void *log;
-  int op;
-  int hot_degree;
+  btree *bt_;
+  NVMLogFile *log_;
+  int op_;
+  int hot_degree_;
 
  public:
   HotNode();
+  HotNode(const std::string path, size_t size);
+
+  ~HotNode();
+
   void hnode_insert(entry_key_t, char *);
   void hnode_delete(entry_key_t);
   char *hnode_search(entry_key_t);
@@ -20,23 +25,29 @@ class HotNode : public InnerNode {
  *  class HotNode
  */
 HotNode::HotNode() {
-  bt = new btree();
-  log = nullptr;
-  op = 0;
-  hot_degree = 0;
+  bt_ = new btree();
+  log_ = new NVMLogFile(LOGPATH, LOGSIZE);
+  op_ = 0;
+  hot_degree_ = 0;
 }
 
-void HotNode::hnode_insert(entry_key_t key, char *right) {
-  bt->btree_insert(key, right);
-  // TODO: Write log and do extra processing.
+HotNode::HotNode(const std::string path, size_t size) {
+  bt_ = new btree();
+  log_ = new NVMLogFile(path, size);
+  op_ = 0;
+  hot_degree_ = 0;
+}
+
+HotNode::~HotNode() { delete bt_; }
+
+void HotNode::hnode_insert(entry_key_t key, char *value) {
+  log_->Write(key, value);
+  bt_->btree_insert(key, value);
 }
 
 void HotNode::hnode_delete(entry_key_t key) {
-  bt->btree_delete(key);
-  // TODO: Write log and do extra processing.
+  log_->Delete(key);
+  bt_->btree_delete(key);
 }
 
-char *HotNode::hnode_search(entry_key_t key) {
-  // TODO: Write log and do extra processing.
-  return bt->btree_search(key);
-}
+char *HotNode::hnode_search(entry_key_t key) { return bt_->btree_search(key); }
