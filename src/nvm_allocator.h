@@ -17,7 +17,7 @@
 
 using entry_key_t = int64_t;
 
-enum LogType { logDeleteType = 0, logWriteType = 1, logUpdateType = 2 };
+enum LogType { logDeleteType = 0, logWriteType = 1 };
 
 const uint64_t mem_reserved = (1 << 10);  // 保留 1K 空间
 
@@ -103,14 +103,16 @@ class NVMAllocator {
 
 class LogNode {
  private:
-  uint64_t type_;
-  uint64_t key_;
+  uint64_t type_ : 1;
+  uint64_t key_ : 63;
   uint64_t value_;
 
  public:
   LogNode(uint64_t type, uint64_t key, uint64_t value)
       : type_(type), key_(key), value_(value){};
 };
+
+#define LOGNODEBYTES 16
 
 class NVMLogFile {
  private:
@@ -137,7 +139,9 @@ class NVMLogFile {
     }
 
     begin_addr_ = pmem_addr_ + 4096;
+    cur_index_ = begin_addr_;
     capacity_ = size;
+    memory_used_ = 0;
     pmem_memset_persist(pmem_addr_, 0, 4096);
   }
 
@@ -166,7 +170,6 @@ class NVMLogFile {
   }
 
   void Write(entry_key_t key, char *value);
-  void Update(entry_key_t key, char *value);
   void Delete(entry_key_t key);
   void Recovery(NVMLogFile *log);
 };
@@ -175,22 +178,15 @@ class NVMLogFile {
  *  class NVMLogFile
  */
 void NVMLogFile::Write(entry_key_t key, char *value) {
-  char *logvalue = this->AllocateAligned(24);
+  char *logvalue = this->AllocateAligned(LOGNODEBYTES);
   LogNode node(logWriteType, key, (uint64_t)value);
-  memcpy(logvalue, &node, 24);
-  nvm_persist(logvalue, 24);
-}
-
-void NVMLogFile::Update(entry_key_t key, char *value) {
-  char *logvalue = this->AllocateAligned(24);
-  LogNode node(logUpdateType, key, (uint64_t)value);
-  memcpy(logvalue, &node, 24);
-  nvm_persist(logvalue, 24);
+  memcpy(logvalue, &node, LOGNODEBYTES);
+  nvm_persist(logvalue, LOGNODEBYTES);
 }
 
 void NVMLogFile::Delete(entry_key_t key) {
-  char *logvalue = this->AllocateAligned(24);
+  char *logvalue = this->AllocateAligned(LOGNODEBYTES);
   LogNode node(logDeleteType, key, 0);
-  memcpy(logvalue, &node, 24);
-  nvm_persist(logvalue, 24);
+  memcpy(logvalue, &node, LOGNODEBYTES);
+  nvm_persist(logvalue, LOGNODEBYTES);
 }
