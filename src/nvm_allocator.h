@@ -12,29 +12,25 @@
 
 #include "nvm_common.h"
 
-#define LOGPATH "/pmem0/log_persistent"
-#define LOGSIZE 64 * (1 << 20)
-
 using entry_key_t = int64_t;
 
 enum LogType { logDeleteType = 0, logWriteType = 1 };
 
-const uint64_t mem_reserved = (1 << 10);  // 保留 1K 空间
+const uint64_t mem_reserved = (1 << 10);
 
 inline void clflush(void *data, int len) { pmem_persist(data, len); }
 
 /*
-class LogWriter;
-
 class NVMAllocator {
  private:
-  char *pmem_addr_;
   size_t mapped_len_;
+  int is_pmem_;
+  char *pmem_addr_;
+  char *begin_addr_;
+  char *cur_index_;
   uint64_t capacity_;
   uint64_t memory_used_;
-  int is_pmem_;
   std::mutex mut_;
-  char *cur_index_;
 
  public:
   NVMAllocator(const std::string path, size_t size) {

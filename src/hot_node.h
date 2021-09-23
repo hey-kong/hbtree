@@ -3,10 +3,13 @@
 #include "inner_node.h"
 #include "nvm_allocator.h"
 
+#define LOGPATH "/pmem0/log/"
+#define LOGSIZE 64 * (1 << 20)
+
 class HotNode : public InnerNode {
  private:
-  btree *bt_;
   NVMLogFile *log_;
+  const char *log_path_;
   int op_;
   int hot_degree_;
 
@@ -24,30 +27,29 @@ class HotNode : public InnerNode {
 /*
  *  class HotNode
  */
-HotNode::HotNode() {
-  bt_ = new btree();
-  log_ = new NVMLogFile(LOGPATH, LOGSIZE);
+HotNode::HotNode() : InnerNode() {
+  string file = "log" + std::to_string(this->Id());
+  string path = LOGPATH + file;
+  log_path_ = path.c_str();
+  if (file_exists(log_path_) != 0) {
+    // TODO: process last remaining.
+  }
+
+  log_ = new NVMLogFile(log_path_, LOGSIZE);
   op_ = 0;
   hot_degree_ = 0;
 }
 
-HotNode::HotNode(const std::string path, size_t size) {
-  bt_ = new btree();
-  log_ = new NVMLogFile(path, size);
-  op_ = 0;
-  hot_degree_ = 0;
-}
-
-HotNode::~HotNode() { delete bt_; }
+HotNode::~HotNode() { delete log_; }
 
 void HotNode::hnode_insert(entry_key_t key, char *value) {
   log_->Write(key, value);
-  bt_->btree_insert(key, value);
+  this->bt_insert(key, value);
 }
 
 void HotNode::hnode_delete(entry_key_t key) {
   log_->Delete(key);
-  bt_->btree_delete(key);
+  this->bt_delete(key);
 }
 
-char *HotNode::hnode_search(entry_key_t key) { return bt_->btree_search(key); }
+char *HotNode::hnode_search(entry_key_t key) { return this->bt_search(key); }

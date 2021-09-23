@@ -14,10 +14,12 @@ default:  all
 all: clean hbtree
 
 cfile:
-	rm -f pmem0/log_persistent
+	rm -f /pmem0/data/*
+	rm -f /pmem0/log/*
 
 clean:
-	rm -f pmem0/log_persistent
+	rm -f /pmem0/data/*
+	rm -f /pmem0/log/*
 	rm -f hbtree
 
 hbtree:

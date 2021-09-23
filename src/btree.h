@@ -7,9 +7,11 @@
    enhancements or updates to the Software. All rights, title to and ownership
    interest in the Software, including all intellectual property rights therein
    shall remain in UNIST.
+
    Please use at your own risk.
 */
 
+#include <libpmemobj.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -26,64 +28,34 @@
 #include <mutex>
 #include <vector>
 
-#define PAGESIZE 512
+#define PAGESIZE (512)
 
-#define CPU_FREQ_MHZ (1994)
-#define DELAY_IN_NS (1000)
 #define CACHE_LINE_SIZE 64
-#define QUERY_NUM 25
 
 #define IS_FORWARD(c) (c % 2 == 0)
 
-using entry_key_t = int64_t; 
+class btree;
+class page;
 
-static inline void cpu_pause() { __asm__ volatile("pause" ::: "memory"); }
+POBJ_LAYOUT_BEGIN(btree);
+POBJ_LAYOUT_ROOT(btree, btree);
+POBJ_LAYOUT_TOID(btree, page);
+POBJ_LAYOUT_END(btree);
 
-static inline unsigned long read_tsc(void) {
-  unsigned long var;
-  unsigned int hi, lo;
-
-  asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
-  var = ((unsigned long long int)hi << 32) | lo;
-
-  return var;
-}
-
-unsigned long write_latency_in_ns = 0;
-unsigned long long search_time_in_insert = 0;
-unsigned int gettime_cnt = 0;
-unsigned long long clflush_time_in_insert = 0;
-unsigned long long update_time_in_insert = 0;
-int clflush_cnt = 0;
-int node_cnt = 0;
+using entry_key_t = int64_t;
 
 using namespace std;
-
-inline void mfence() { asm volatile("mfence" ::: "memory"); }
-
-inline void clflush(char *data, int len) {
-  volatile char *ptr = (char *)((unsigned long)data & ~(CACHE_LINE_SIZE - 1));
-  mfence();
-  for (; ptr < data + len; ptr += CACHE_LINE_SIZE) {
-    unsigned long etsc =
-        read_tsc() + (unsigned long)(write_latency_in_ns * CPU_FREQ_MHZ / 1000);
-    asm volatile("clflush %0" : "+m"(*(volatile char *)ptr));
-    while (read_tsc() < etsc) cpu_pause();
-    //++clflush_cnt;
-  }
-  mfence();
-}
-
-class page;
 
 class btree {
  private:
   int height;
-  char *root;
+  TOID(page) root;
+  PMEMobjpool *pop;
 
  public:
   btree();
-  void setNewRoot(char *);
+  void constructor(PMEMobjpool *);
+  void setNewRoot(TOID(page));
   void btree_insert(entry_key_t, char *);
   void btree_insert_internal(char *, entry_key_t, char *, uint32_t);
   void btree_delete(entry_key_t);
@@ -92,41 +64,41 @@ class btree {
   char *btree_search(entry_key_t);
   void btree_search_range(entry_key_t, entry_key_t, unsigned long *);
   void printAll();
+  void randScounter();
 
   friend class page;
 };
 
 class header {
  private:
+  TOID(page) sibling_ptr;  // 16 bytes
   page *leftmost_ptr;      // 8 bytes
-  page *sibling_ptr;       // 8 bytes
   uint32_t level;          // 4 bytes
   uint8_t switch_counter;  // 1 bytes
   uint8_t is_deleted;      // 1 bytes
   int16_t last_index;      // 2 bytes
-  char dummy[8];           // 8 bytes
 
   friend class page;
   friend class btree;
 
  public:
-  header() {
+  void constructor() {
     leftmost_ptr = NULL;
-    sibling_ptr = NULL;
+    TOID_ASSIGN(sibling_ptr, pmemobj_oid(this));
+    sibling_ptr.oid.off = 0;
     switch_counter = 0;
     last_index = -1;
     is_deleted = false;
   }
-
-  ~header() {}
 };
 
 class entry {
  private:
   entry_key_t key;  // 8 bytes
   char *ptr;        // 8 bytes
+
  public:
-  entry() {
+  void constructor() {
     key = LONG_MAX;
     ptr = NULL;
   }
@@ -140,19 +112,32 @@ const int count_in_line = CACHE_LINE_SIZE / sizeof(entry);
 
 class page {
  private:
-  header hdr;                  // header in persistent memory, 16 bytes
+  header hdr;                  // header in persistent memory, 32 bytes
   entry records[cardinality];  // slots in persistent memory, 16 bytes * n
 
  public:
   friend class btree;
 
-  page(uint32_t level = 0) {
+  void constructor(uint32_t level = 0) {
+    hdr.constructor();
+    for (int i = 0; i < cardinality; i++) {
+      records[i].key = LONG_MAX;
+      records[i].ptr = NULL;
+    }
+
     hdr.level = level;
     records[0].ptr = NULL;
   }
 
   // this is called when tree grows
-  page(page *left, entry_key_t key, page *right, uint32_t level = 0) {
+  void constructor(PMEMobjpool *pop, page *left, entry_key_t key, page *right,
+                   uint32_t level = 0) {
+    hdr.constructor();
+    for (int i = 0; i < cardinality; i++) {
+      records[i].key = LONG_MAX;
+      records[i].ptr = NULL;
+    }
+
     hdr.leftmost_ptr = left;
     hdr.level = level;
     records[0].key = key;
@@ -161,18 +146,13 @@ class page {
 
     hdr.last_index = 0;
 
-    clflush((char *)this, sizeof(page));
-  }
-
-  void *operator new(size_t size) {
-    void *ret;
-    posix_memalign(&ret, 64, size);
-    return ret;
+    pmemobj_persist(pop, this, sizeof(page));
   }
 
   inline int count() {
     uint8_t previous_switch_counter;
     int count = 0;
+
     do {
       previous_switch_counter = hdr.switch_counter;
       count = hdr.last_index + 1;
@@ -196,7 +176,7 @@ class page {
     return count;
   }
 
-  inline bool remove_key(entry_key_t key) {
+  inline bool remove_key(PMEMobjpool *pop, entry_key_t key) {
     // Set the switch_counter
     if (IS_FORWARD(hdr.switch_counter)) ++hdr.switch_counter;
 
@@ -221,7 +201,7 @@ class page {
             ((((int)(remainder + sizeof(entry)) / CACHE_LINE_SIZE) == 1) &&
              ((remainder + sizeof(entry)) % CACHE_LINE_SIZE) != 0);
         if (do_flush) {
-          clflush((char *)records_ptr, CACHE_LINE_SIZE);
+          pmemobj_persist(pop, (void *)records_ptr, CACHE_LINE_SIZE);
         }
       }
     }
@@ -238,18 +218,18 @@ class page {
       register int num_entries_before = count();
 
       // This node is root
-      if (this == (page *)bt->root) {
+      if (this == D_RO(bt->root)) {
         if (hdr.level > 0) {
-          if (num_entries_before == 1 && !hdr.sibling_ptr) {
-            bt->root = (char *)hdr.leftmost_ptr;
-            clflush((char *)&(bt->root), sizeof(char *));
+          if (num_entries_before == 1 && (hdr.sibling_ptr.oid.off == 0)) {
+            bt->root.oid.off = (uint64_t)hdr.leftmost_ptr;
+            pmemobj_persist(bt->pop, &(bt->root), sizeof(TOID(page)));
 
             hdr.is_deleted = 1;
           }
         }
 
         // Remove the key from this node
-        bool ret = remove_key(key);
+        bool ret = remove_key(bt->pop, key);
         return true;
       }
 
@@ -260,7 +240,7 @@ class page {
       }
 
       // Remove the key from this node
-      bool ret = remove_key(key);
+      bool ret = remove_key(bt->pop, key);
 
       if (!should_rebalance) {
         return (hdr.leftmost_ptr == NULL) ? ret : true;
@@ -270,19 +250,20 @@ class page {
     // Remove a key from the parent node
     entry_key_t deleted_key_from_parent = 0;
     bool is_leftmost_node = false;
-    page *left_sibling;
-    bt->btree_delete_internal(key, (char *)this, hdr.level + 1,
+    TOID(page) left_sibling;
+    left_sibling.oid.pool_uuid_lo = bt->root.oid.pool_uuid_lo;
+    bt->btree_delete_internal(key, (char *)pmemobj_oid(this).off, hdr.level + 1,
                               &deleted_key_from_parent, &is_leftmost_node,
-                              &left_sibling);
+                              (page **)&left_sibling.oid.off);
 
     if (is_leftmost_node) {
-      hdr.sibling_ptr->remove(bt, hdr.sibling_ptr->records[0].key, true,
-                              with_lock);
+      D_RW(hdr.sibling_ptr)
+          ->remove(bt, D_RW(hdr.sibling_ptr)->records[0].key, true, with_lock);
       return true;
     }
 
     register int num_entries = count();
-    register int left_num_entries = left_sibling->count();
+    register int left_num_entries = D_RW(left_sibling)->count();
 
     // Merge or Redistribution
     int total_num_entries = num_entries + left_num_entries;
@@ -296,126 +277,151 @@ class page {
       if (num_entries < left_num_entries) {  // left -> right
         if (hdr.leftmost_ptr == nullptr) {
           for (int i = left_num_entries - 1; i >= m; i--) {
-            insert_key(left_sibling->records[i].key,
-                       left_sibling->records[i].ptr, &num_entries);
+            insert_key(bt->pop, D_RW(left_sibling)->records[i].key,
+                       D_RW(left_sibling)->records[i].ptr, &num_entries);
           }
 
-          left_sibling->records[m].ptr = nullptr;
-          clflush((char *)&(left_sibling->records[m].ptr), sizeof(char *));
+          D_RW(left_sibling)->records[m].ptr = nullptr;
+          pmemobj_persist(bt->pop, &(D_RW(left_sibling)->records[m].ptr),
+                          sizeof(char *));
 
-          left_sibling->hdr.last_index = m - 1;
-          clflush((char *)&(left_sibling->hdr.last_index), sizeof(int16_t));
+          D_RW(left_sibling)->hdr.last_index = m - 1;
+          pmemobj_persist(bt->pop, &(D_RW(left_sibling)->hdr.last_index),
+                          sizeof(int16_t));
 
           parent_key = records[0].key;
         } else {
-          insert_key(deleted_key_from_parent, (char *)hdr.leftmost_ptr,
+          insert_key(bt->pop, deleted_key_from_parent, (char *)hdr.leftmost_ptr,
                      &num_entries);
 
           for (int i = left_num_entries - 1; i > m; i--) {
-            insert_key(left_sibling->records[i].key,
-                       left_sibling->records[i].ptr, &num_entries);
+            insert_key(bt->pop, D_RO(left_sibling)->records[i].key,
+                       D_RO(left_sibling)->records[i].ptr, &num_entries);
           }
 
-          parent_key = left_sibling->records[m].key;
+          parent_key = D_RO(left_sibling)->records[m].key;
 
-          hdr.leftmost_ptr = (page *)left_sibling->records[m].ptr;
-          clflush((char *)&(hdr.leftmost_ptr), sizeof(page *));
+          hdr.leftmost_ptr = (page *)D_RO(left_sibling)->records[m].ptr;
+          pmemobj_persist(bt->pop, &(hdr.leftmost_ptr), sizeof(page *));
 
-          left_sibling->records[m].ptr = nullptr;
-          clflush((char *)&(left_sibling->records[m].ptr), sizeof(char *));
+          D_RW(left_sibling)->records[m].ptr = nullptr;
+          pmemobj_persist(bt->pop, &(D_RW(left_sibling)->records[m].ptr),
+                          sizeof(char *));
 
-          left_sibling->hdr.last_index = m - 1;
-          clflush((char *)&(left_sibling->hdr.last_index), sizeof(int16_t));
+          D_RW(left_sibling)->hdr.last_index = m - 1;
+          pmemobj_persist(bt->pop, &(D_RW(left_sibling)->hdr.last_index),
+                          sizeof(int16_t));
         }
 
-        if (left_sibling == ((page *)bt->root)) {
-          page *new_root =
-              new page(left_sibling, parent_key, this, hdr.level + 1);
-          bt->setNewRoot((char *)new_root);
+        if (left_sibling.oid.off == bt->root.oid.off) {
+          TOID(page) new_root;
+          POBJ_NEW(bt->pop, &new_root, page, NULL, NULL);
+          D_RW(new_root)->constructor(bt->pop, (page *)left_sibling.oid.off,
+                                      parent_key, (page *)pmemobj_oid(this).off,
+                                      hdr.level + 1);
+          bt->setNewRoot(new_root);
         } else {
-          bt->btree_insert_internal((char *)left_sibling, parent_key,
-                                    (char *)this, hdr.level + 1);
+          bt->btree_insert_internal((char *)left_sibling.oid.off, parent_key,
+                                    (char *)pmemobj_oid(this).off,
+                                    hdr.level + 1);
         }
       } else {  // from leftmost case
         hdr.is_deleted = 1;
-        clflush((char *)&(hdr.is_deleted), sizeof(uint8_t));
+        pmemobj_persist(bt->pop, &(hdr.is_deleted), sizeof(uint8_t));
 
-        page *new_sibling = new page(hdr.level);
-        new_sibling->hdr.sibling_ptr = hdr.sibling_ptr;
+        TOID(page) new_sibling;
+        POBJ_NEW(bt->pop, &new_sibling, page, NULL, NULL);
+        D_RW(new_sibling)->constructor(hdr.level);
+        D_RW(new_sibling)->hdr.sibling_ptr = hdr.sibling_ptr;
 
         int num_dist_entries = num_entries - m;
         int new_sibling_cnt = 0;
 
         if (hdr.leftmost_ptr == nullptr) {
           for (int i = 0; i < num_dist_entries; i++) {
-            left_sibling->insert_key(records[i].key, records[i].ptr,
-                                     &left_num_entries);
+            D_RW(left_sibling)
+                ->insert_key(bt->pop, records[i].key, records[i].ptr,
+                             &left_num_entries);
           }
 
           for (int i = num_dist_entries; records[i].ptr != NULL; i++) {
-            new_sibling->insert_key(records[i].key, records[i].ptr,
-                                    &new_sibling_cnt, false);
+            D_RW(new_sibling)
+                ->insert_key(bt->pop, records[i].key, records[i].ptr,
+                             &new_sibling_cnt, false);
           }
 
-          clflush((char *)(new_sibling), sizeof(page));
+          pmemobj_persist(bt->pop, D_RW(new_sibling), sizeof(page));
 
-          left_sibling->hdr.sibling_ptr = new_sibling;
-          clflush((char *)&(left_sibling->hdr.sibling_ptr), sizeof(page *));
+          D_RW(left_sibling)->hdr.sibling_ptr = new_sibling;
+          pmemobj_persist(bt->pop, &(D_RW(left_sibling)->hdr.sibling_ptr),
+                          sizeof(page *));
 
-          parent_key = new_sibling->records[0].key;
+          parent_key = D_RO(new_sibling)->records[0].key;
         } else {
-          left_sibling->insert_key(deleted_key_from_parent,
-                                   (char *)hdr.leftmost_ptr, &left_num_entries);
+          D_RW(left_sibling)
+              ->insert_key(bt->pop, deleted_key_from_parent,
+                           (char *)hdr.leftmost_ptr, &left_num_entries);
 
           for (int i = 0; i < num_dist_entries - 1; i++) {
-            left_sibling->insert_key(records[i].key, records[i].ptr,
-                                     &left_num_entries);
+            D_RW(left_sibling)
+                ->insert_key(bt->pop, records[i].key, records[i].ptr,
+                             &left_num_entries);
           }
 
           parent_key = records[num_dist_entries - 1].key;
 
-          new_sibling->hdr.leftmost_ptr =
+          D_RW(new_sibling)->hdr.leftmost_ptr =
               (page *)records[num_dist_entries - 1].ptr;
           for (int i = num_dist_entries; records[i].ptr != NULL; i++) {
-            new_sibling->insert_key(records[i].key, records[i].ptr,
-                                    &new_sibling_cnt, false);
+            D_RW(new_sibling)
+                ->insert_key(bt->pop, records[i].key, records[i].ptr,
+                             &new_sibling_cnt, false);
           }
-          clflush((char *)(new_sibling), sizeof(page));
+          pmemobj_persist(bt->pop, D_RW(new_sibling), sizeof(page));
 
-          left_sibling->hdr.sibling_ptr = new_sibling;
-          clflush((char *)&(left_sibling->hdr.sibling_ptr), sizeof(page *));
+          D_RW(left_sibling)->hdr.sibling_ptr = new_sibling;
+          pmemobj_persist(bt->pop, &(D_RW(left_sibling)->hdr.sibling_ptr),
+                          sizeof(page *));
         }
 
-        if (left_sibling == ((page *)bt->root)) {
-          page *new_root =
-              new page(left_sibling, parent_key, new_sibling, hdr.level + 1);
-          bt->setNewRoot((char *)new_root);
+        if (left_sibling.oid.off == bt->root.oid.off) {
+          TOID(page) new_root;
+          POBJ_NEW(bt->pop, &new_root, page, NULL, NULL);
+          D_RW(new_root)->constructor(bt->pop, (page *)left_sibling.oid.off,
+                                      parent_key, (page *)new_sibling.oid.off,
+                                      hdr.level + 1);
+          bt->setNewRoot(new_root);
         } else {
-          bt->btree_insert_internal((char *)left_sibling, parent_key,
-                                    (char *)new_sibling, hdr.level + 1);
+          bt->btree_insert_internal((char *)left_sibling.oid.off, parent_key,
+                                    (char *)new_sibling.oid.off, hdr.level + 1);
         }
       }
     } else {
       hdr.is_deleted = 1;
-      clflush((char *)&(hdr.is_deleted), sizeof(uint8_t));
+      pmemobj_persist(bt->pop, &(hdr.is_deleted), sizeof(uint8_t));
+
       if (hdr.leftmost_ptr)
-        left_sibling->insert_key(deleted_key_from_parent,
-                                 (char *)hdr.leftmost_ptr, &left_num_entries);
+        D_RW(left_sibling)
+            ->insert_key(bt->pop, deleted_key_from_parent,
+                         (char *)hdr.leftmost_ptr, &left_num_entries);
 
       for (int i = 0; records[i].ptr != NULL; ++i) {
-        left_sibling->insert_key(records[i].key, records[i].ptr,
-                                 &left_num_entries);
+        D_RW(left_sibling)
+            ->insert_key(bt->pop, records[i].key, records[i].ptr,
+                         &left_num_entries);
       }
 
-      left_sibling->hdr.sibling_ptr = hdr.sibling_ptr;
-      clflush((char *)&(left_sibling->hdr.sibling_ptr), sizeof(page *));
+      D_RW(left_sibling)->hdr.sibling_ptr = hdr.sibling_ptr;
+      pmemobj_persist(bt->pop, &(D_RW(left_sibling)->hdr.sibling_ptr),
+                      sizeof(page *));
     }
 
     return true;
   }
 
-  inline void insert_key(entry_key_t key, char *ptr, int *num_entries,
-                         bool flush = true, bool update_last_index = true) {
+  inline void insert_key(PMEMobjpool *pop, entry_key_t key, char *ptr,
+                         int *num_entries, bool flush = true,
+                         bool update_last_index = true) {
     // update switch_counter
     if (!IS_FORWARD(hdr.switch_counter)) ++hdr.switch_counter;
 
@@ -429,14 +435,15 @@ class page {
       array_end->ptr = (char *)NULL;
 
       if (flush) {
-        clflush((char *)this, CACHE_LINE_SIZE);
+        pmemobj_persist(pop, this, CACHE_LINE_SIZE);
       }
     } else {
       int i = *num_entries - 1, inserted = 0, to_flush_cnt = 0;
       records[*num_entries + 1].ptr = records[*num_entries].ptr;
+
       if (flush) {
-        if ((uint64_t) & (records[*num_entries + 1].ptr) % CACHE_LINE_SIZE == 0)
-          clflush((char *)&(records[*num_entries + 1].ptr), sizeof(char *));
+        if ((uint64_t) & (records[*num_entries + 1]) % CACHE_LINE_SIZE == 0)
+          pmemobj_persist(pop, &records[*num_entries + 1].ptr, sizeof(char *));
       }
 
       // FAST
@@ -454,7 +461,7 @@ class page {
                 ((((int)(remainder + sizeof(entry)) / CACHE_LINE_SIZE) == 1) &&
                  ((remainder + sizeof(entry)) % CACHE_LINE_SIZE) != 0);
             if (do_flush) {
-              clflush((char *)records_ptr, CACHE_LINE_SIZE);
+              pmemobj_persist(pop, (void *)records_ptr, CACHE_LINE_SIZE);
               to_flush_cnt = 0;
             } else
               ++to_flush_cnt;
@@ -464,7 +471,7 @@ class page {
           records[i + 1].key = key;
           records[i + 1].ptr = ptr;
 
-          if (flush) clflush((char *)&records[i + 1], sizeof(entry));
+          if (flush) pmemobj_persist(pop, &records[i + 1], sizeof(entry));
           inserted = 1;
           break;
         }
@@ -473,7 +480,8 @@ class page {
         records[0].ptr = (char *)hdr.leftmost_ptr;
         records[0].key = key;
         records[0].ptr = ptr;
-        if (flush) clflush((char *)&records[0], sizeof(entry));
+
+        if (flush) pmemobj_persist(pop, &records[0], sizeof(entry));
       }
     }
 
@@ -487,11 +495,12 @@ class page {
   page *store(btree *bt, char *left, entry_key_t key, char *right, bool flush,
               page *invalid_sibling = NULL) {
     // If this node has a sibling node,
-    if (hdr.sibling_ptr && (hdr.sibling_ptr != invalid_sibling)) {
+    if ((hdr.sibling_ptr.oid.off != 0) &&
+        ((page *)hdr.sibling_ptr.oid.off != invalid_sibling)) {
       // Compare this key with the first key of the sibling
-      if (key > hdr.sibling_ptr->records[0].key) {
-        return hdr.sibling_ptr->store(bt, NULL, key, right, true,
-                                      invalid_sibling);
+      if (key > D_RO(hdr.sibling_ptr)->records[0].key) {
+        return D_RW(hdr.sibling_ptr)
+            ->store(bt, NULL, key, right, true, invalid_sibling);
       }
     }
 
@@ -499,12 +508,15 @@ class page {
 
     // FAST
     if (num_entries < cardinality - 1) {
-      insert_key(key, right, &num_entries, flush);
-      return this;
+      insert_key(bt->pop, key, right, &num_entries, flush);
+      return (page *)pmemobj_oid(this).off;
     } else {  // FAIR
       // overflow
       // create a new node
-      page *sibling = new page(hdr.level);
+      TOID(page) sibling;
+      POBJ_NEW(bt->pop, &sibling, page, NULL, NULL);
+      D_RW(sibling)->constructor(hdr.level);
+      page *sibling_ptr = D_RW(sibling);
       register int m = (int)ceil(num_entries / 2);
       entry_key_t split_key = records[m].key;
 
@@ -512,22 +524,22 @@ class page {
       int sibling_cnt = 0;
       if (hdr.leftmost_ptr == NULL) {  // leaf node
         for (int i = m; i < num_entries; ++i) {
-          sibling->insert_key(records[i].key, records[i].ptr, &sibling_cnt,
-                              false);
+          sibling_ptr->insert_key(bt->pop, records[i].key, records[i].ptr,
+                                  &sibling_cnt, false);
         }
       } else {  // internal node
         for (int i = m + 1; i < num_entries; ++i) {
-          sibling->insert_key(records[i].key, records[i].ptr, &sibling_cnt,
-                              false);
+          sibling_ptr->insert_key(bt->pop, records[i].key, records[i].ptr,
+                                  &sibling_cnt, false);
         }
-        sibling->hdr.leftmost_ptr = (page *)records[m].ptr;
+        sibling_ptr->hdr.leftmost_ptr = (page *)records[m].ptr;
       }
 
-      sibling->hdr.sibling_ptr = hdr.sibling_ptr;
-      clflush((char *)sibling, sizeof(page));
+      sibling_ptr->hdr.sibling_ptr = hdr.sibling_ptr;
+      pmemobj_persist(bt->pop, sibling_ptr, sizeof(page));
 
       hdr.sibling_ptr = sibling;
-      clflush((char *)&hdr, sizeof(hdr));
+      pmemobj_persist(bt->pop, &hdr, sizeof(hdr));
 
       // set to NULL
       if (IS_FORWARD(hdr.switch_counter))
@@ -535,10 +547,10 @@ class page {
       else
         ++hdr.switch_counter;
       records[m].ptr = NULL;
-      clflush((char *)&records[m], sizeof(entry));
+      pmemobj_persist(bt->pop, &records[m], sizeof(entry));
 
       hdr.last_index = m - 1;
-      clflush((char *)&(hdr.last_index), sizeof(int16_t));
+      pmemobj_persist(bt->pop, &hdr.last_index, sizeof(int16_t));
 
       num_entries = hdr.last_index + 1;
 
@@ -546,20 +558,23 @@ class page {
 
       // insert the key
       if (key < split_key) {
-        insert_key(key, right, &num_entries);
-        ret = this;
+        insert_key(bt->pop, key, right, &num_entries);
+        ret = (page *)pmemobj_oid(this).off;
       } else {
-        sibling->insert_key(key, right, &sibling_cnt);
-        ret = sibling;
+        sibling_ptr->insert_key(bt->pop, key, right, &sibling_cnt);
+        ret = (page *)sibling.oid.off;
       }
 
       // Set a new root or insert the split key to the parent
-      if (bt->root == (char *)this) {  // only one node can update the root ptr
-        page *new_root =
-            new page((page *)this, split_key, sibling, hdr.level + 1);
-        bt->setNewRoot((char *)new_root);
+      if (D_RO(bt->root) == this) {  // only one node can update the root ptr
+        TOID(page) new_root;
+        POBJ_NEW(bt->pop, &new_root, page, NULL, NULL);
+        D_RW(new_root)->constructor(bt->pop, (page *)bt->root.oid.off,
+                                    split_key, (page *)sibling.oid.off,
+                                    hdr.level + 1);
+        bt->setNewRoot(new_root);
       } else {
-        bt->btree_insert_internal(NULL, split_key, (char *)sibling,
+        bt->btree_insert_internal(NULL, split_key, (char *)sibling.oid.off,
                                   hdr.level + 1);
       }
 
@@ -593,8 +608,9 @@ class page {
                   }
                 }
               }
-            } else
+            } else {
               return;
+            }
           }
 
           for (i = 1; current->records[i].ptr != NULL; ++i) {
@@ -606,12 +622,13 @@ class page {
                     if (tmp_ptr) buf[off++] = (unsigned long)tmp_ptr;
                   }
                 }
-              } else
+              } else {
                 return;
+              }
             }
           }
         } else {
-          for (i = count() - 1; i > 0; --i) {
+          for (i = current->count() - 1; i > 0; --i) {
             if ((tmp_key = current->records[i].key) > min) {
               if (tmp_key < max) {
                 if ((tmp_ptr = current->records[i].ptr) !=
@@ -620,8 +637,9 @@ class page {
                     if (tmp_ptr) buf[off++] = (unsigned long)tmp_ptr;
                   }
                 }
-              } else
+              } else {
                 return;
+              }
             }
           }
 
@@ -634,13 +652,14 @@ class page {
                   }
                 }
               }
-            } else
+            } else {
               return;
+            }
           }
         }
       } while (previous_switch_counter != current->hdr.switch_counter);
 
-      current = current->hdr.sibling_ptr;
+      current = D_RW(current->hdr.sibling_ptr);
     }
   }
 
@@ -706,8 +725,10 @@ class page {
         return ret;
       }
 
-      if ((t = (char *)hdr.sibling_ptr) && key >= ((page *)t)->records[0].key)
+      if ((t = (char *)hdr.sibling_ptr.oid.off) &&
+          key >= D_RW(hdr.sibling_ptr)->records[0].key) {
         return t;
+      }
 
       return NULL;
     } else {  // internal node
@@ -755,8 +776,8 @@ class page {
         }
       } while (hdr.switch_counter != previous_switch_counter);
 
-      if ((t = (char *)hdr.sibling_ptr) != NULL) {
-        if (key >= ((page *)t)->records[0].key) return t;
+      if ((t = (char *)hdr.sibling_ptr.oid.off) != NULL) {
+        if (key >= D_RW(hdr.sibling_ptr)->records[0].key) return t;
       }
 
       if (ret) {
@@ -771,9 +792,9 @@ class page {
   // print a node
   void print() {
     if (hdr.leftmost_ptr == NULL)
-      printf("[%d] leaf %x \n", this->hdr.level, this);
+      printf("[%d] leaf %x \n", this->hdr.level, pmemobj_oid(this).off);
     else
-      printf("[%d] internal %x \n", this->hdr.level, this);
+      printf("[%d] internal %x \n", this->hdr.level, pmemobj_oid(this).off);
     printf("last_index: %d\n", hdr.last_index);
     printf("switch_counter: %d\n", hdr.switch_counter);
     printf("search direction: ");
@@ -787,51 +808,59 @@ class page {
     for (int i = 0; records[i].ptr != NULL; ++i)
       printf("%ld,%x ", records[i].key, records[i].ptr);
 
-    printf("%x ", hdr.sibling_ptr);
+    printf("%x ", hdr.sibling_ptr.oid.off);
 
     printf("\n");
   }
 
   void printAll() {
+    TOID(page) p = TOID_NULL(page);
+    TOID_ASSIGN(p, pmemobj_oid(this));
+
     if (hdr.leftmost_ptr == NULL) {
       printf("printing leaf node: ");
       print();
     } else {
       printf("printing internal node: ");
       print();
-      ((page *)hdr.leftmost_ptr)->printAll();
+      p.oid.off = (uint64_t)hdr.leftmost_ptr;
+      D_RW(p)->printAll();
       for (int i = 0; records[i].ptr != NULL; ++i) {
-        ((page *)records[i].ptr)->printAll();
+        p.oid.off = (uint64_t)records[i].ptr;
+        D_RW(p)->printAll();
       }
     }
   }
 };
 
 /*
- *  class btree
+ * class btree
  */
-btree::btree() {
-  root = (char *)new page();
+void btree::constructor(PMEMobjpool *pool) {
+  pop = pool;
+  POBJ_NEW(pop, &root, page, NULL, NULL);
+  D_RW(root)->constructor();
   height = 1;
 }
 
-void btree::setNewRoot(char *new_root) {
-  this->root = (char *)new_root;
-  clflush((char *)&(this->root), sizeof(char *));
+void btree::setNewRoot(TOID(page) new_root) {
+  root = new_root;
+  pmemobj_persist(pop, &root, sizeof(TOID(page)));
   ++height;
 }
 
 char *btree::btree_search(entry_key_t key) {
-  page *p = (page *)root;
+  TOID(page) p = root;
 
-  while (p->hdr.leftmost_ptr != NULL) {
-    p = (page *)p->linear_search(key);
+  while (D_RO(p)->hdr.leftmost_ptr != NULL) {
+    p.oid.off = (uint64_t)D_RW(p)->linear_search(key);
   }
 
-  page *t;
-  while ((t = (page *)p->linear_search(key)) == p->hdr.sibling_ptr) {
-    p = t;
-    if (!p) {
+  uint64_t t;
+  while ((t = (uint64_t)D_RW(p)->linear_search(key)) ==
+         D_RO(p)->hdr.sibling_ptr.oid.off) {
+    p.oid.off = t;
+    if (!t) {
       break;
     }
   }
@@ -845,14 +874,14 @@ char *btree::btree_search(entry_key_t key) {
 }
 
 // insert the key in the leaf node
-void btree::btree_insert(entry_key_t key, char *right) {  // need to be string
-  page *p = (page *)root;
+void btree::btree_insert(entry_key_t key, char *right) {
+  TOID(page) p = root;
 
-  while (p->hdr.leftmost_ptr != NULL) {
-    p = (page *)p->linear_search(key);
+  while (D_RO(p)->hdr.leftmost_ptr != NULL) {
+    p.oid.off = (uint64_t)D_RW(p)->linear_search(key);
   }
 
-  if (!p->store(this, NULL, key, right, true)) {  // store
+  if (!D_RW(p)->store(this, NULL, key, right, true)) {  // store
     btree_insert(key, right);
   }
 }
@@ -860,32 +889,34 @@ void btree::btree_insert(entry_key_t key, char *right) {  // need to be string
 // store the key into the node at the given level
 void btree::btree_insert_internal(char *left, entry_key_t key, char *right,
                                   uint32_t level) {
-  if (level > ((page *)root)->hdr.level) return;
+  if (level > D_RO(root)->hdr.level) return;
 
-  page *p = (page *)this->root;
+  TOID(page) p = root;
 
-  while (p->hdr.level > level) p = (page *)p->linear_search(key);
+  while (D_RO(p)->hdr.level > level)
+    p.oid.off = (uint64_t)D_RW(p)->linear_search(key);
 
-  if (!p->store(this, NULL, key, right, true)) {
+  if (!D_RW(p)->store(this, NULL, key, right, true)) {
     btree_insert_internal(left, key, right, level);
   }
 }
 
 void btree::btree_delete(entry_key_t key) {
-  page *p = (page *)root;
+  TOID(page) p = root;
 
-  while (p->hdr.leftmost_ptr != NULL) {
-    p = (page *)p->linear_search(key);
+  while (D_RO(p)->hdr.leftmost_ptr != NULL) {
+    p.oid.off = (uint64_t)D_RW(p)->linear_search(key);
   }
 
-  page *t;
-  while ((t = (page *)p->linear_search(key)) == p->hdr.sibling_ptr) {
-    p = t;
-    if (!p) break;
+  uint64_t t;
+  while ((t = (uint64_t)(D_RW(p)->linear_search(key))) ==
+         D_RW(p)->hdr.sibling_ptr.oid.off) {
+    p.oid.off = t;
+    if (!t) break;
   }
 
-  if (p) {
-    if (!p->remove(this, key)) {
+  if (t) {
+    if (!D_RW(p)->remove(this, key)) {
       btree_delete(key);
     }
   } else {
@@ -896,35 +927,35 @@ void btree::btree_delete(entry_key_t key) {
 void btree::btree_delete_internal(entry_key_t key, char *ptr, uint32_t level,
                                   entry_key_t *deleted_key,
                                   bool *is_leftmost_node, page **left_sibling) {
-  if (level > ((page *)this->root)->hdr.level) return;
+  if (level > D_RO(root)->hdr.level) return;
 
-  page *p = (page *)this->root;
+  TOID(page) p = root;
 
-  while (p->hdr.level > level) {
-    p = (page *)p->linear_search(key);
+  while (D_RW(p)->hdr.level > level) {
+    p.oid.off = (uint64_t)D_RW(p)->linear_search(key);
   }
 
-  if ((char *)p->hdr.leftmost_ptr == ptr) {
+  if ((char *)D_RO(p)->hdr.leftmost_ptr == ptr) {
     *is_leftmost_node = true;
     return;
   }
 
   *is_leftmost_node = false;
 
-  for (int i = 0; p->records[i].ptr != NULL; ++i) {
-    if (p->records[i].ptr == ptr) {
+  for (int i = 0; D_RO(p)->records[i].ptr != NULL; ++i) {
+    if (D_RO(p)->records[i].ptr == ptr) {
       if (i == 0) {
-        if ((char *)p->hdr.leftmost_ptr != p->records[i].ptr) {
-          *deleted_key = p->records[i].key;
-          *left_sibling = p->hdr.leftmost_ptr;
-          p->remove(this, *deleted_key, false, false);
+        if ((char *)D_RO(p)->hdr.leftmost_ptr != D_RO(p)->records[i].ptr) {
+          *deleted_key = D_RO(p)->records[i].key;
+          *left_sibling = D_RO(p)->hdr.leftmost_ptr;
+          D_RW(p)->remove(this, *deleted_key, false, false);
           break;
         }
       } else {
-        if (p->records[i - 1].ptr != p->records[i].ptr) {
-          *deleted_key = p->records[i].key;
-          *left_sibling = (page *)p->records[i - 1].ptr;
-          p->remove(this, *deleted_key, false, false);
+        if (D_RO(p)->records[i - 1].ptr != D_RO(p)->records[i].ptr) {
+          *deleted_key = D_RO(p)->records[i].key;
+          *left_sibling = (page *)D_RO(p)->records[i - 1].ptr;
+          D_RW(p)->remove(this, *deleted_key, false, false);
           break;
         }
       }
@@ -935,15 +966,15 @@ void btree::btree_delete_internal(entry_key_t key, char *ptr, uint32_t level,
 // Function to search keys from "min" to "max"
 void btree::btree_search_range(entry_key_t min, entry_key_t max,
                                unsigned long *buf) {
-  page *p = (page *)root;
+  TOID(page) p = root;
 
-  while (p) {
-    if (p->hdr.leftmost_ptr != NULL) {
+  while (p.oid.off != 0) {
+    if (D_RO(p)->hdr.leftmost_ptr != NULL) {
       // The current page is internal
-      p = (page *)p->linear_search(min);
+      p.oid.off = (uint64_t)D_RW(p)->linear_search(min);
     } else {
       // Found a leaf
-      p->linear_search_range(min, max, buf);
+      D_RW(p)->linear_search_range(min, max, buf);
 
       break;
     }
@@ -952,22 +983,37 @@ void btree::btree_search_range(entry_key_t min, entry_key_t max,
 
 void btree::printAll() {
   int total_keys = 0;
-  page *leftmost = (page *)root;
-  printf("root: %x\n", root);
-  if (root) {
+  TOID(page) leftmost = root;
+  printf("root: %x\n", root.oid.off);
+  if (root.oid.off) {
     do {
-      page *sibling = leftmost;
-      while (sibling) {
-        if (sibling->hdr.level == 0) {
-          total_keys += sibling->hdr.last_index + 1;
+      TOID(page) sibling = leftmost;
+      while (sibling.oid.off) {
+        if (D_RO(sibling)->hdr.level == 0) {
+          total_keys += D_RO(sibling)->hdr.last_index + 1;
         }
-        sibling->print();
-        sibling = sibling->hdr.sibling_ptr;
+        D_RW(sibling)->print();
+        sibling = D_RO(sibling)->hdr.sibling_ptr;
       }
       printf("-----------------------------------------\n");
-      leftmost = leftmost->hdr.leftmost_ptr;
-    } while (leftmost);
+      leftmost.oid.off = (uint64_t)D_RO(leftmost)->hdr.leftmost_ptr;
+    } while (leftmost.oid.off != 0);
   }
 
   printf("total number of keys: %d\n", total_keys);
+}
+
+void btree::randScounter() {
+  TOID(page) leftmost = root;
+  srand(time(NULL));
+  if (root.oid.off) {
+    do {
+      TOID(page) sibling = leftmost;
+      while (sibling.oid.off) {
+        D_RW(sibling)->hdr.switch_counter = rand() % 100;
+        sibling = D_RO(sibling)->hdr.sibling_ptr;
+      }
+      leftmost.oid.off = (uint64_t)D_RO(leftmost)->hdr.leftmost_ptr;
+    } while (leftmost.oid.off != 0);
+  }
 }
