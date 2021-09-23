@@ -1,5 +1,7 @@
 #pragma once
 
+#include <map>
+
 #include "inner_node.h"
 #include "nvm_allocator.h"
 
@@ -8,6 +10,7 @@
 
 class HotNode : public InnerNode {
  private:
+  std::map<entry_key_t, char *> data_array;
   NVMLogFile *log_;
   const char *log_path_;
   int op_;
@@ -31,7 +34,7 @@ HotNode::HotNode() : InnerNode() {
   string file = "log" + std::to_string(this->Id());
   string path = LOGPATH + file;
   log_path_ = path.c_str();
-  if (file_exists(log_path_) != 0) {
+  if (file_exists(log_path_) == 0) {
     // TODO: process last remaining.
   }
 
@@ -44,12 +47,12 @@ HotNode::~HotNode() { delete log_; }
 
 void HotNode::hnode_insert(entry_key_t key, char *value) {
   log_->Write(key, value);
-  this->bt_insert(key, value);
+  data_array[key] = value;
 }
 
 void HotNode::hnode_delete(entry_key_t key) {
   log_->Delete(key);
-  this->bt_delete(key);
+  data_array.erase(key);
 }
 
-char *HotNode::hnode_search(entry_key_t key) { return this->bt_search(key); }
+char *HotNode::hnode_search(entry_key_t key) { return data_array[key]; }

@@ -11,8 +11,14 @@ int main() {
     node->hnode_insert(keys[i], (char *)keys[i]);
   }
 
+  char *value;
   for (int i = 0; i < 100; i++) {
-    node->hnode_search(keys[i]);
+    value = node->hnode_search(keys[i]);
+    if (value != nullptr) {
+      std::cout << "key("<< keys[i] << "), value(" << (entry_key_t)value << ")" << std::endl;
+    } else {
+      std::cout << "not found: key("<< keys[i] << ")" << std::endl;
+    }
   }
 
   return 0;
