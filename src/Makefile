@@ -1,5 +1,5 @@
 CXX = g++
-LDFLAGS = -pthread -lpmemobj -lpmem -lrt -lm
+LDFLAGS = -pthread -lpmemobj -lpmem -lrt -lm -mpopcnt -mlzcnt -mbmi
 DEFS = -DSINGLE_BTREE -DNO_VALUE
 MULT_DEFS = -DNO_VALUE
 WFLAGS = -Wall -Wno-format -Wno-unused-variable
