@@ -15,7 +15,7 @@ static inline int file_exists(char const *file) { return access(file, F_OK); }
 std::atomic<uint64_t> node_id;
 
 class InnerNode {
- private:
+ protected:
   uint64_t id_;
   entry_key_t min_key_;
   InnerNode *next_;

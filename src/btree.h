@@ -10,6 +10,7 @@
 
    Please use at your own risk.
 */
+#pragma once
 
 #include <libpmemobj.h>
 #include <math.h>
