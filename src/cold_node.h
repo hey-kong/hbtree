@@ -6,4 +6,6 @@ class ColdNode : public InnerNode {
  private:
  public:
   ColdNode();
+
+  string type() { return "ColdNode"; }
 };

@@ -12,16 +12,16 @@ class Background {
   virtual void mainLoop() = 0;
 
  protected:
-  std::thread thread_;
-  std::mutex mu_;
-  std::condition_variable cv_;
+  thread thread_;
+  mutex mu_;
+  condition_variable cv_;
 
  public:
   Background() {}
   ~Background() {}
 
   void start() {
-    thread_ = std::thread(&Background::mainLoop, this);
+    thread_ = thread(&Background::mainLoop, this);
     thread_.detach();
   }
 };
@@ -34,11 +34,11 @@ class LogBackground : public Background {
 
   virtual void mainLoop() {
     while (1) {
-      std::unique_lock<std::mutex> lk(this->mu_);
+      unique_lock<mutex> lk(this->mu_);
       while (this->apply_addr_ == this->end_addr_ ||
              nullptr == this->end_addr_) {
         this->cv_.wait(lk);
-        std::cout << "SLEEP" << std::endl;
+        cout << "SLEEP" << endl;
       }
 
       LogNode tmp;
@@ -48,7 +48,7 @@ class LogBackground : public Background {
       } else if (tmp.type == logWriteType) {
         D_RW(bt_)->btree_insert(tmp.key, (char *)tmp.value);
       }
-      std::cout << "READ " << tmp.key << std::endl;
+      cout << "READ " << tmp.key << endl;
       apply_addr_ += LOGNODEBYTES;
     }
     // TODO: If aborted, some KVs will not be applied to NVM.
@@ -62,7 +62,7 @@ class LogBackground : public Background {
   }
 
   void update(char *addr) {
-    std::lock_guard<std::mutex> lk(this->mu_);
+    lock_guard<mutex> lk(this->mu_);
     this->end_addr_ = addr;
     this->cv_.notify_one();
   }

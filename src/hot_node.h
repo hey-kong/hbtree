@@ -12,16 +12,18 @@
 class HotNode : public InnerNode {
  private:
   // TODO: Switch the type of data_array.
-  std::map<entry_key_t, char *> data_array;
+  map<entry_key_t, char *> data_array;
   NVMLogFile *log_;
   LogHandler *handler_;
   const char *log_path_;
 
  public:
   HotNode();
-  HotNode(const std::string path, size_t size);
+  HotNode(const string path, size_t size);
 
   ~HotNode();
+
+  string type() { return "HotNode"; }
 
   void hnode_insert(entry_key_t, char *);
   void hnode_delete(entry_key_t);
@@ -32,7 +34,7 @@ class HotNode : public InnerNode {
  *  class HotNode
  */
 HotNode::HotNode() : InnerNode() {
-  string file = "log" + std::to_string(this->Id());
+  string file = "log" + to_string(this->Id());
   string path = LOGPATH + file;
   log_path_ = path.c_str();
   if (file_exists(log_path_) == 0) {

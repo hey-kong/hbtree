@@ -27,10 +27,10 @@ class NVMLogFile {
   char *cur_addr_;
   uint64_t capacity_;
   uint64_t memory_used_;
-  std::mutex mut_;
+  mutex mut_;
 
  public:
-  NVMLogFile(const std::string path, size_t size) {
+  NVMLogFile(const string path, size_t size) {
     // 映射NVM空间到文件
     pmem_addr_ = static_cast<char *>(pmem_map_file(
         path.c_str(), size, PMEM_FILE_CREATE, 0666, &mapped_len_, &is_pmem_));

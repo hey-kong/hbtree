@@ -13,7 +13,7 @@
  */
 static inline int file_exists(char const *file) { return access(file, F_OK); }
 
-std::atomic<uint64_t> node_id;
+atomic<uint64_t> node_id;
 
 class InnerNode {
  protected:
@@ -32,6 +32,7 @@ class InnerNode {
   ~InnerNode();
 
   uint64_t Id() { return this->id_; }
+  string type() { return "InnerNode"; }
 
   void UpdateHotDegree() { hot_degree_ = DECAY * hot_degree_ + op_; }
   double GetHotDegree() { return hot_degree_; }
@@ -45,9 +46,9 @@ class InnerNode {
  *  class InnerNode
  */
 InnerNode::InnerNode() {
-  id_ = node_id.fetch_add(1, std::memory_order_relaxed);
+  id_ = node_id.fetch_add(1, memory_order_relaxed);
 
-  string file = "data" + std::to_string(id_);
+  string file = "data" + to_string(id_);
   string path = BTREEPATH + file;
   persistent_path_ = path.c_str();
 

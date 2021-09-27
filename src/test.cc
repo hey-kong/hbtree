@@ -19,10 +19,10 @@ int main() {
   for (int i = 0; i < 100; i++) {
     value = node->hnode_search(keys[i]);
     if (value != nullptr) {
-      std::cout << "key(" << keys[i] << "), value(" << (entry_key_t)value << ")"
-                << std::endl;
+      cout << "key(" << keys[i] << "), value(" << (entry_key_t)value << ")"
+           << endl;
     } else {
-      std::cout << "not found: key(" << keys[i] << ")" << std::endl;
+      cout << "not found: key(" << keys[i] << ")" << endl;
     }
   }
 
@@ -30,9 +30,9 @@ int main() {
   // payloads are random values
   alex::Alex<KEY_TYPE, PAYLOAD_TYPE> index;
   const int num_keys = 100;
-  std::pair<KEY_TYPE, PAYLOAD_TYPE> values[num_keys];
-  std::mt19937_64 gen(std::random_device{}());
-  std::uniform_int_distribution<PAYLOAD_TYPE> dis;
+  pair<KEY_TYPE, PAYLOAD_TYPE> values[num_keys];
+  mt19937_64 gen(random_device{}());
+  uniform_int_distribution<PAYLOAD_TYPE> dis;
   for (int i = 0; i < num_keys; i++) {
     values[i].first = i;
     values[i].second = dis(gen);
@@ -58,8 +58,7 @@ int main() {
     num_entries++;
   }
   if (num_entries != 190) {
-    std::cout << "Error! There should be 190 entries in the index."
-              << std::endl;
+    cout << "Error! There should be 190 entries in the index." << endl;
   }
 
   num_entries = 0;
@@ -67,9 +66,9 @@ int main() {
     num_entries++;
   }
   if (num_entries != 50) {
-    std::cout
+    cout
         << "Error! There should be 50 entries with keys in the range [50, 100)."
-        << std::endl;
+        << endl;
   }
 
   num_entries = 0;
@@ -79,9 +78,9 @@ int main() {
     it++;
   }
   if (num_entries != 50) {
-    std::cout
+    cout
         << "Error! There should be 50 entries with keys in the range [50, 100)."
-        << std::endl;
+        << endl;
   }
 
   for (int i = 0; i < 9; i++) {
@@ -95,17 +94,16 @@ int main() {
     num_duplicates++;
   }
   if (num_duplicates != 10) {
-    std::cout << "Error! There should be 10 entries with key of value 42."
-              << std::endl;
+    cout << "Error! There should be 10 entries with key of value 42." << endl;
   }
 
   it = index.find(1337);
   if (it != index.end()) {
-    std::cout << "Error! Key with value 1337 should not exist." << std::endl;
+    cout << "Error! Key with value 1337 should not exist." << endl;
   }
 
   auto stats = index.get_stats();
-  std::cout << "Final num keys: " << stats.num_keys << std::endl;
-  std::cout << "Num inserts: " << stats.num_inserts << std::endl;
+  cout << "Final num keys: " << stats.num_keys << endl;
+  cout << "Num inserts: " << stats.num_inserts << endl;
   return 0;
 }
