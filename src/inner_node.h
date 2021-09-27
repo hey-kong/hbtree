@@ -6,6 +6,7 @@
 
 #define BTREEPATH "/pmem0/data/"
 #define BTREESIZE 16 * (1 << 20)
+#define DECAY 0.2
 
 /*
  *file_exists -- checks if file exists
@@ -18,6 +19,8 @@ class InnerNode {
  protected:
   uint64_t id_;
   entry_key_t min_key_;
+  int op_;
+  double hot_degree_;
   InnerNode *next_;
   const char *persistent_path_;
   TOID(btree) bt_;
@@ -28,7 +31,11 @@ class InnerNode {
 
   ~InnerNode();
 
-  uint64_t Id();
+  uint64_t Id() { return this->id_; }
+
+  void UpdateHotDegree() { hot_degree_ = DECAY * hot_degree_ + op_; }
+  double GetHotDegree() { return hot_degree_; }
+
   void bt_insert(entry_key_t, char *);
   void bt_delete(entry_key_t);
   char *bt_search(entry_key_t);
@@ -59,8 +66,6 @@ InnerNode::~InnerNode() {
   delete next_;
   pmemobj_close(pop_);
 }
-
-uint64_t InnerNode::Id() { return this->id_; }
 
 void InnerNode::bt_insert(entry_key_t key, char *value) {
   D_RW(bt_)->btree_insert(key, value);

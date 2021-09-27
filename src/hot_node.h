@@ -16,8 +16,6 @@ class HotNode : public InnerNode {
   NVMLogFile *log_;
   LogHandler *handler_;
   const char *log_path_;
-  int op_;
-  int hot_degree_;
 
  public:
   HotNode();
