@@ -7,7 +7,7 @@
 #include "nvm_allocator.h"
 
 #define LOGPATH "/pmem0/log/"
-#define LOGSIZE 64 * (1 << 20)
+#define LOGSIZE 64 + (4 << 10)
 
 class HotNode : public InnerNode {
  private:
@@ -43,7 +43,8 @@ HotNode::HotNode() : InnerNode() {
 
   log_ = new NVMLogFile(log_path_, LOGSIZE);
   char *begin = log_->GetBeginAddr();
-  handler_ = new LogHandler(begin, bt_);
+  handler_ =
+      new LogHandler(log_->GetPmemAddr(), log_->GetBeginAddr(), LOGSIZE, bt_);
   op_ = 0;
   hot_degree_ = 0;
 }

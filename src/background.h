@@ -9,7 +9,7 @@
 
 class Background {
  private:
-  virtual void mainLoop() = 0;
+  virtual void worker() = 0;
 
  protected:
   thread thread_;
@@ -21,20 +21,30 @@ class Background {
   ~Background() {}
 
   void start() {
-    thread_ = thread(&Background::mainLoop, this);
+    thread_ = thread(&Background::worker, this);
     thread_.detach();
   }
 };
 
 class LogBackground : public Background {
  private:
+  char *pmem_addr_;
   char *apply_addr_;
   char *end_addr_;
+  uint64_t capacity_;
   TOID(btree) bt_;
+  uint64_t loop_;
 
-  virtual void mainLoop() {
+  virtual void worker() {
+    memcpy(pmem_addr_, &loop_, 8);
     while (1) {
       unique_lock<mutex> lk(this->mu_);
+      if (IsFull()) {
+        loop_++;
+        memcpy(pmem_addr_, &loop_, 8);
+        apply_addr_ = pmem_addr_ + Hollow;
+        log_cv.notify_one();
+      }
       while (this->apply_addr_ == this->end_addr_ ||
              nullptr == this->end_addr_) {
         this->cv_.wait(lk);
@@ -55,11 +65,17 @@ class LogBackground : public Background {
   }
 
  public:
-  LogBackground(char *addr, TOID(btree) bt) {
-    apply_addr_ = addr;
+  LogBackground(char *pmem_addr, char *apply_addr, uint64_t capacity,
+                TOID(btree) bt) {
+    pmem_addr_ = pmem_addr;
+    apply_addr_ = apply_addr;
     end_addr_ = nullptr;
+    capacity_ = capacity;
     bt_ = bt;
+    loop_ = 1;
   }
+
+  bool IsFull() { return apply_addr_ - pmem_addr_ + MemReserved >= capacity_; }
 
   void update(char *addr) {
     lock_guard<mutex> lk(this->mu_);
@@ -70,8 +86,9 @@ class LogBackground : public Background {
 
 class LogHandler {
  public:
-  LogHandler(char *addr, TOID(btree) bt) {
-    log_thread = new LogBackground(addr, bt);
+  LogHandler(char *pmem_addr, char *apply_addr, uint64_t capacity,
+             TOID(btree) bt) {
+    log_thread = new LogBackground(pmem_addr, apply_addr, capacity, bt);
     log_thread->start();
   }
   void update(char *addr) { log_thread->update(addr); }

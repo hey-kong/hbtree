@@ -2,6 +2,8 @@
 
 #include <libpmem.h>
 
+#include <condition_variable>
+
 static inline void nvm_persist(const void *addr, size_t len) {
   pmem_persist(addr, len);
 }
@@ -12,6 +14,10 @@ static inline void nvm_memcpy_persist(void *pmemdest, const void *src,
 }
 
 #define LOGNODEBYTES 16
+
+const uint64_t MemReserved = (1 << 10);
+const uint64_t Hollow = (3 << 10);
+condition_variable log_cv;
 
 struct LogNode {
   uint64_t type : 1;
