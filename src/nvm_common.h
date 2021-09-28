@@ -14,10 +14,9 @@ static inline void nvm_memcpy_persist(void *pmemdest, const void *src,
 }
 
 #define LOGNODEBYTES 16
+#define LOGNODEBITS (16 * 8)
 
-const uint64_t MemReserved = (1 << 10);
-const uint64_t Hollow = (3 << 10);
-condition_variable log_cv;
+const uint64_t Hollow = (4 << 10);
 
 struct LogNode {
   uint64_t type : 1;

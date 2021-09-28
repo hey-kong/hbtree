@@ -19,12 +19,13 @@ int main() {
   for (int i = 0; i < 100; i++) {
     value = node->hnode_search(keys[i]);
     if (value != nullptr) {
-      cout << "key(" << keys[i] << "), value(" << (entry_key_t)value << ")"
-           << endl;
+      printf("key(%ld), value(%ld)\n", keys[i], (entry_key_t)value);
     } else {
-      cout << "not found: key(" << keys[i] << ")" << endl;
+      printf("not found: key(%ld)\n", keys[i]);
     }
   }
+
+  sleep(1);  // Wait for logs to be applied to NVM
 
   // Create some synthetic data: keys are dense integers between 0 and 99, and
   // payloads are random values
@@ -105,5 +106,7 @@ int main() {
   auto stats = index.get_stats();
   cout << "Final num keys: " << stats.num_keys << endl;
   cout << "Num inserts: " << stats.num_inserts << endl;
+
+  delete node;
   return 0;
 }

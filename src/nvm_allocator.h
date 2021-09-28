@@ -10,26 +10,54 @@
 #include <mutex>
 #include <string>
 
+#include "btree.h"
+#include "daemon.h"
 #include "nvm_common.h"
 
 using entry_key_t = int64_t;
 
 inline void clflush(void *data, int len) { pmem_persist(data, len); }
 
-class NVMLogFile {
+class NVMLogFile : public Daemon {
  private:
   size_t mapped_len_;
   int is_pmem_;
   char *pmem_addr_;
   char *begin_addr_;
+  char *apply_addr_;
   char *cur_addr_;
   uint64_t capacity_;
-  uint64_t memory_used_;
-  uint64_t loop_;
+  atomic<uint64_t> memory_used_;
   mutex mut_;
+  TOID(btree) bt_;
+
+  void worker() {
+    while (1) {
+      if (IsFoot(apply_addr_)) {
+        apply_addr_ = pmem_addr_ + Hollow;
+      }
+      while (memory_used_.load() == 0) {
+        // Wait for memory_used_ to update
+      }
+
+      LogNode *tmp = (LogNode *)malloc(LOGNODEBYTES);
+      memcpy(tmp, apply_addr_, LOGNODEBYTES);
+      if (tmp->type == logDeleteType) {
+        D_RW(bt_)->btree_delete(tmp->key);
+      } else if (tmp->type == logWriteType) {
+        D_RW(bt_)->btree_insert(tmp->key, (char *)tmp->value);
+      }
+      apply_addr_ += LOGNODEBITS;
+      atomic_fetch_sub(&memory_used_, LOGNODEBITS);
+      printf("READ %lu\n", tmp->key);
+    }
+    // TODO: If aborted, some KVs will not be applied to NVM.
+  }
 
  public:
-  NVMLogFile(const string path, size_t size) {
+  NVMLogFile(const string path, size_t size, TOID(btree) bt) {
+    assert(size > Hollow);
+    size = size - ((size - Hollow) % LOGNODEBITS) + LOGNODEBITS;
     pmem_addr_ = static_cast<char *>(pmem_map_file(
         path.c_str(), size, PMEM_FILE_CREATE, 0666, &mapped_len_, &is_pmem_));
     if (pmem_addr_ == NULL) {
@@ -41,10 +69,11 @@ class NVMLogFile {
     }
 
     begin_addr_ = pmem_addr_ + Hollow;
+    apply_addr_ = begin_addr_;
     cur_addr_ = begin_addr_;
     capacity_ = size;
     memory_used_ = 0;
-    loop_ = 1;
+    bt_ = bt;
     pmem_memset_persist(pmem_addr_, 0, Hollow);
   }
 
@@ -59,23 +88,21 @@ class NVMLogFile {
     pmem_memset_persist(pmem_addr_, 0, mapped_len_);
   }
 
-  bool IsFull() { return Hollow + memory_used_ + MemReserved >= capacity_; }
+  bool IsFoot(char *addr) { return (uint64_t)(addr - pmem_addr_) == capacity_; }
 
-  char *AllocateAligned(size_t bytes, size_t huge_page_size = 0) {
-    unique_lock<mutex> lk(this->mut_);
-    if (IsFull()) {
-      loop_++;
-      uint64_t loop;
-      memcpy(&loop, pmem_addr_, 8);
-      if (loop_ > loop + 1) {
-        log_cv.wait(lk);
-      }
-      cur_addr_ = begin_addr_;
-      memory_used_ = 0;
+  char *AllocateAligned() {
+    mut_.lock();
+    if (IsFoot(cur_addr_)) {
+      cur_addr_ = pmem_addr_ + Hollow;
     }
+    while (memory_used_.load() == capacity_ - Hollow) {
+      // Wait for memory_used_ to update
+    }
+
     char *result = cur_addr_;
-    cur_addr_ += bytes;
-    memory_used_ += bytes;
+    cur_addr_ += LOGNODEBITS;
+    atomic_fetch_add(&memory_used_, LOGNODEBITS);
+    mut_.unlock();
     return result;
   }
 
@@ -88,7 +115,7 @@ class NVMLogFile {
  *  class NVMLogFile
  */
 char *NVMLogFile::Write(entry_key_t key, char *value) {
-  char *log = this->AllocateAligned(LOGNODEBYTES);
+  char *log = this->AllocateAligned();
   LogNode node;
   node.type = logWriteType;
   node.key = key;
@@ -99,7 +126,7 @@ char *NVMLogFile::Write(entry_key_t key, char *value) {
 }
 
 char *NVMLogFile::Delete(entry_key_t key) {
-  char *log = this->AllocateAligned(LOGNODEBYTES);
+  char *log = this->AllocateAligned();
   LogNode node;
   node.type = logDeleteType;
   node.key = key;
