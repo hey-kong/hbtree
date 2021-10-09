@@ -18,6 +18,8 @@ using entry_key_t = int64_t;
 
 inline void clflush(void *data, int len) { pmem_persist(data, len); }
 
+class InnerNode;
+
 class NVMLogFile : public Daemon {
  private:
   size_t mapped_len_;
@@ -46,6 +48,15 @@ class NVMLogFile : public Daemon {
         D_RW(bt_)->btree_delete(tmp->key);
       } else if (tmp->type == logWriteType) {
         D_RW(bt_)->btree_insert(tmp->key, (char *)tmp->value);
+      } else if (tmp->type == logSplitType) {
+        entry_key_t keys[BTREEITEMS];
+        unsigned long vals[BTREEITEMS];
+        int cnt;
+        D_RW(bt_)->btree_search_to_end(tmp->key, keys, vals, cnt);
+        InnerNode *new_node = (InnerNode *)tmp->value;
+        for (int i = 0; i < cnt; i++) {
+          printf("key(%ld), value(%ld)\n", keys[i], (entry_key_t)vals[i]);
+        }
       }
       apply_addr_ += LOGNODEBITS;
       atomic_fetch_sub(&memory_used_, LOGNODEBITS);
@@ -108,6 +119,7 @@ class NVMLogFile : public Daemon {
 
   char *Write(entry_key_t key, char *value);
   char *Delete(entry_key_t key);
+  char *Split(entry_key_t key, InnerNode *new_node);
   void Recovery(NVMLogFile *log);
 };
 
@@ -131,6 +143,17 @@ char *NVMLogFile::Delete(entry_key_t key) {
   node.type = logDeleteType;
   node.key = key;
   node.value = 0;
+  memcpy(log, &node, LOGNODEBYTES);
+  nvm_persist(log, LOGNODEBYTES);
+  return this->cur_addr_;
+}
+
+char *NVMLogFile::Split(entry_key_t right_boundary, InnerNode *new_node) {
+  char *log = this->AllocateAligned();
+  LogNode node;
+  node.type = logSplitType;
+  node.key = right_boundary;
+  node.value = (uint64_t)new_node;
   memcpy(log, &node, LOGNODEBYTES);
   nvm_persist(log, LOGNODEBYTES);
   return this->cur_addr_;

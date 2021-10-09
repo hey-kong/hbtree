@@ -275,18 +275,18 @@ class AlexModelNode : public AlexNode<T, P> {
 };
 
 /*
-* Functions are organized into different sections:
-* - Constructors and destructors
-* - General helper functions
-* - Iterator
-* - Cost model
-* - Bulk loading and model building (e.g., bulk_load, bulk_load_from_existing)
-* - Lookups (e.g., find_key, find_lower, find_upper, lower_bound, upper_bound)
-* - Inserts and resizes (e.g, insert)
-* - Deletes (e.g., erase, erase_one)
-* - Stats
-* - Debugging
-*/
+ * Functions are organized into different sections:
+ * - Constructors and destructors
+ * - General helper functions
+ * - Iterator
+ * - Cost model
+ * - Bulk loading and model building (e.g., bulk_load, bulk_load_from_existing)
+ * - Lookups (e.g., find_key, find_lower, find_upper, lower_bound, upper_bound)
+ * - Inserts and resizes (e.g, insert)
+ * - Deletes (e.g., erase, erase_one)
+ * - Stats
+ * - Debugging
+ */
 template <class T, class P, class Compare = AlexCompare,
           class Alloc = std::allocator<std::pair<T, P>>,
           bool allow_duplicates = true>
@@ -356,8 +356,9 @@ class AlexDataNode : public AlexNode<T, P> {
   int num_resizes_ = 0;  // technically not required, but nice to have
 
   // Variables for determining append-mostly behavior
-  T max_key_ = std::numeric_limits<
-      T>::lowest();  // max key in node, updates after inserts but not erases
+  T max_key_ =
+      std::numeric_limits<T>::lowest();        // max key in node, updates after
+                                               // inserts but not erases
   T min_key_ = std::numeric_limits<T>::max();  // min key in node, updates after
                                                // inserts but not erases
   int num_right_out_of_bounds_inserts_ =
@@ -2315,13 +2316,14 @@ class AlexDataNode : public AlexNode<T, P> {
 
   std::string to_string() const {
     std::string str;
-    str += "Num keys: " + std::to_string(num_keys_) + ", Capacity: " +
-           std::to_string(data_capacity_) + ", Expansion Threshold: " +
-           std::to_string(expansion_threshold_) + "\n";
+    str += "Num keys: " + std::to_string(num_keys_) +
+           ", Capacity: " + std::to_string(data_capacity_) +
+           ", Expansion Threshold: " + std::to_string(expansion_threshold_) +
+           "\n";
     for (int i = 0; i < data_capacity_; i++) {
       str += (std::to_string(ALEX_DATA_NODE_KEY_AT(i)) + " ");
     }
     return str;
   }
 };
-}
+}  // namespace alex

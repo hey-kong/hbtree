@@ -215,6 +215,7 @@ class Alex {
         data_node_type(key_less_, allocator_);
     empty_data_node->bulk_load(nullptr, 0);
     root_node_ = empty_data_node;
+    stats_.num_data_nodes++;
     create_superroot();
   }
 
@@ -225,6 +226,7 @@ class Alex {
         data_node_type(key_less_, allocator_);
     empty_data_node->bulk_load(nullptr, 0);
     root_node_ = empty_data_node;
+    stats_.num_data_nodes++;
     create_superroot();
   }
 
@@ -234,6 +236,7 @@ class Alex {
         data_node_type(key_less_, allocator_);
     empty_data_node->bulk_load(nullptr, 0);
     root_node_ = empty_data_node;
+    stats_.num_data_nodes++;
     create_superroot();
   }
 
@@ -784,8 +787,9 @@ class Alex {
                                        derived_params_.max_data_node_slots)) +
             1;
         used_fanout_tree_nodes.clear();
-        int max_data_node_keys = static_cast<int>(
-            derived_params_.max_data_node_slots * data_node_type::kInitDensity_);
+        int max_data_node_keys =
+            static_cast<int>(derived_params_.max_data_node_slots *
+                             data_node_type::kInitDensity_);
         fanout_tree::compute_level<T, P>(
             values, num_keys, node, total_keys, used_fanout_tree_nodes,
             best_fanout_tree_depth, max_data_node_keys,

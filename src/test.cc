@@ -1,23 +1,23 @@
 #include "alex.h"
-#include "hot_node.h"
+#include "inner_node.h"
 
 #define KEY_TYPE int
 #define PAYLOAD_TYPE int
 
 int main() {
-  HotNode *node = new HotNode();
+  InnerNode *node = new InnerNode(HOTNODE);
   entry_key_t *keys = new entry_key_t[100];
   for (int i = 0; i < 100; i++) {
     keys[i] = i + 1;
   }
 
   for (int i = 0; i < 90; i++) {
-    node->hnode_insert(keys[i], (char *)keys[i]);
+    node->insert(keys[i], (char *)keys[i]);
   }
 
   char *value;
   for (int i = 0; i < 100; i++) {
-    value = node->hnode_search(keys[i]);
+    value = node->search(keys[i]);
     if (value != nullptr) {
       printf("key(%ld), value(%ld)\n", keys[i], (entry_key_t)value);
     } else {
@@ -25,7 +25,9 @@ int main() {
     }
   }
 
-  sleep(1);  // Wait for logs to be applied to NVM
+  node->split(20);
+
+  sleep(3);  // Wait for logs to be applied to NVM
 
   // Create some synthetic data: keys are dense integers between 0 and 99, and
   // payloads are random values

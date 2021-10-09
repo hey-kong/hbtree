@@ -35,6 +35,9 @@
 
 #define IS_FORWARD(c) (c % 2 == 0)
 
+#define BTREESIZE 16 * (1 << 20)
+#define BTREEITEMS 200
+
 class btree;
 class page;
 
@@ -64,6 +67,7 @@ class btree {
                              bool *, page **);
   char *btree_search(entry_key_t);
   void btree_search_range(entry_key_t, entry_key_t, unsigned long *);
+  void btree_search_to_end(entry_key_t, entry_key_t *, unsigned long *, int &);
   void printAll();
   void randScounter();
 
@@ -664,6 +668,82 @@ class page {
     }
   }
 
+  void linear_search_to_end(entry_key_t start, entry_key_t *keys,
+                            unsigned long *vals, int &cnt) {
+    int i, off = 0;
+    uint8_t previous_switch_counter;
+    page *current = this;
+
+    while (current) {
+      int old_off = off;
+      do {
+        previous_switch_counter = current->hdr.switch_counter;
+        off = old_off;
+
+        entry_key_t tmp_key;
+        char *tmp_ptr;
+
+        if (IS_FORWARD(previous_switch_counter)) {
+          if ((tmp_key = current->records[0].key) >= start) {
+            if ((tmp_ptr = current->records[0].ptr) != NULL) {
+              if (tmp_key == current->records[0].key) {
+                if (tmp_ptr) {
+                  keys[off] = tmp_key;
+                  vals[off++] = (unsigned long)tmp_ptr;
+                  cnt++;
+                }
+              }
+            }
+          }
+
+          for (i = 1; current->records[i].ptr != NULL; ++i) {
+            if ((tmp_key = current->records[i].key) >= start) {
+              if ((tmp_ptr = current->records[i].ptr) !=
+                  current->records[i - 1].ptr) {
+                if (tmp_key == current->records[i].key) {
+                  if (tmp_ptr) {
+                    keys[off] = tmp_key;
+                    vals[off++] = (unsigned long)tmp_ptr;
+                    cnt++;
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          for (i = current->count() - 1; i > 0; --i) {
+            if ((tmp_key = current->records[i].key) >= start) {
+              if ((tmp_ptr = current->records[i].ptr) !=
+                  current->records[i - 1].ptr) {
+                if (tmp_key == current->records[i].key) {
+                  if (tmp_ptr) {
+                    keys[off] = tmp_key;
+                    vals[off++] = (unsigned long)tmp_ptr;
+                    cnt++;
+                  }
+                }
+              }
+            }
+
+            if ((tmp_key = current->records[0].key) >= start) {
+              if ((tmp_ptr = current->records[0].ptr) != NULL) {
+                if (tmp_key == current->records[0].key) {
+                  if (tmp_ptr) {
+                    keys[off] = tmp_key;
+                    vals[off++] = (unsigned long)tmp_ptr;
+                    cnt++;
+                  }
+                }
+              }
+            }
+          }
+        }
+      } while (previous_switch_counter != current->hdr.switch_counter);
+
+      current = D_RW(current->hdr.sibling_ptr);
+    }
+  }
+
   char *linear_search(entry_key_t key) {
     int i = 1;
     uint8_t previous_switch_counter;
@@ -976,6 +1056,23 @@ void btree::btree_search_range(entry_key_t min, entry_key_t max,
     } else {
       // Found a leaf
       D_RW(p)->linear_search_range(min, max, buf);
+
+      break;
+    }
+  }
+}
+
+void btree::btree_search_to_end(entry_key_t start, entry_key_t *keys,
+                                unsigned long *vals, int &cnt) {
+  TOID(page) p = root;
+
+  while (p.oid.off != 0) {
+    if (D_RO(p)->hdr.leftmost_ptr != NULL) {
+      // The current page is internal
+      p.oid.off = (uint64_t)D_RW(p)->linear_search(start);
+    } else {
+      // Found a leaf
+      D_RW(p)->linear_search_to_end(start, keys, vals, cnt);
 
       break;
     }

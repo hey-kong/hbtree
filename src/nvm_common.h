@@ -19,9 +19,9 @@ static inline void nvm_memcpy_persist(void *pmemdest, const void *src,
 const uint64_t Hollow = (4 << 10);
 
 struct LogNode {
-  uint64_t type : 1;
-  uint64_t key : 63;
+  uint64_t type : 2;
+  uint64_t key : 62;
   uint64_t value;
 };
 
-enum LogType { logDeleteType = 0, logWriteType = 1 };
+enum LogType { logDeleteType = 0, logWriteType = 1, logSplitType = 2 };
