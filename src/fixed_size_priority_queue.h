@@ -13,8 +13,8 @@
 // See the Apache 2 License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef FIXED_SIZE_PRIORITY_QUEUE_H_
-#define FIXED_SIZE_PRIORITY_QUEUE_H_
+#ifndef _FIXED_SIZE_PRIORITY_QUEUE_H_
+#define _FIXED_SIZE_PRIORITY_QUEUE_H_
 
 #include <algorithm>
 #include <iostream>
@@ -75,4 +75,4 @@ class fixed_size_priority_queue {
   void operator delete[](void *);
 };
 
-#endif  // FIXED_SIZE_PRIORITY_QUEUE_H_
+#endif  // _FIXED_SIZE_PRIORITY_QUEUE_H_

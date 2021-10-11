@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _DAEMON_H_
+#define _DAEMON_H_
 
 #include <thread>
 
@@ -18,3 +19,5 @@ class Daemon {
     thread_.detach();
   }
 };
+
+#endif  // _DAEMON_H_

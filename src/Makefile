@@ -22,5 +22,5 @@ clean:
 	rm -f /pmem0/log/*
 	rm -f hbtree
 
-hbtree:
-	$(CXX) $(SING_CXXFLAGS) test.cc -o hbtree $(LDFLAGS)
+hbtree: btree.cc nvm_allocator.cc inner_node.cc test.cc
+	$(CXX) $(SING_CXXFLAGS) btree.cc nvm_allocator.cc inner_node.cc test.cc -o hbtree $(LDFLAGS)

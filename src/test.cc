@@ -25,9 +25,13 @@ int main() {
     }
   }
 
-  node->split(20);
+  node->split(21);
 
   sleep(3);  // Wait for logs to be applied to NVM
+
+  InnerNode *next = node->next;
+  node->printTree();
+  next->printTree();
 
   // Create some synthetic data: keys are dense integers between 0 and 99, and
   // payloads are random values

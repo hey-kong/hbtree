@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _NVM_COMMON_H_
+#define _NVM_COMMON_H_
 
 #include <libpmem.h>
 
@@ -25,3 +26,5 @@ struct LogNode {
 };
 
 enum LogType { logDeleteType = 0, logWriteType = 1, logSplitType = 2 };
+
+#endif  // _NVM_COMMON_H_

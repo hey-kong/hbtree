@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _HBTREE_H_
+#define _HBTREE_H_
 
 #include <algorithm>
 #include <map>
@@ -70,3 +71,5 @@ class HBTree {
  *  class HBTree
  */
 HBTree::HBTree() { dummy_ = new InnerNode(COLDNODE); }
+
+#endif  // _HBTREE_H_
