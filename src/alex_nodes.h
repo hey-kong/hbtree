@@ -11,6 +11,7 @@
 #pragma once
 
 #include "alex_base.h"
+#include "inner_node.h"
 
 // Whether we store key and payload arrays separately in data nodes
 // By default, we store them separately
@@ -312,6 +313,9 @@ class AlexDataNode : public AlexNode<T, P> {
 
   self_type* next_leaf_ = nullptr;
   self_type* prev_leaf_ = nullptr;
+
+  // For updating B+Tree in NVM
+  InnerNode* inner_node;
 
 #if ALEX_DATA_NODE_SEP_ARRAYS
   T* key_slots_ = nullptr;  // holds keys

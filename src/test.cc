@@ -36,6 +36,7 @@ int main() {
   // Create some synthetic data: keys are dense integers between 0 and 99, and
   // payloads are random values
   alex::Alex<KEY_TYPE, PAYLOAD_TYPE> index;
+  index.InitRootNode(next);
   const int num_keys = 100;
   pair<KEY_TYPE, PAYLOAD_TYPE> values[num_keys];
   mt19937_64 gen(random_device{}());

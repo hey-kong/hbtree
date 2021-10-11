@@ -8,23 +8,26 @@ InnerNode::InnerNode(string type) {
   op_ = 0;
   hot_degree_ = 0;
   type_ = type;
-
-  string file = "data" + to_string(id_);
-  string path = BTREEPATH + file;
-  persistent_path_ = path.c_str();
-
-  bt_ = TOID_NULL(btree);
-  if (file_exists(persistent_path_) != 0) {
-    pop_ = pmemobj_create(persistent_path_, file.c_str(), BTREESIZE, 0666);
-    bt_ = POBJ_ROOT(pop_, btree);
-    D_RW(bt_)->constructor(pop_);
-  } else {
-    pop_ = pmemobj_open(persistent_path_, file.c_str());
-    bt_ = POBJ_ROOT(pop_, btree);
-  }
-
   prev = nullptr;
   next = nullptr;
+
+  if (type != INNERNODE) {
+    string file = "data" + to_string(id_);
+    string path = BTREEPATH + file;
+    persistent_path_ = path.c_str();
+
+    bt_ = TOID_NULL(btree);
+    if (file_exists(persistent_path_) != 0) {
+      pop_ = pmemobj_create(persistent_path_, file.c_str(), BTREESIZE, 0666);
+      bt_ = POBJ_ROOT(pop_, btree);
+      D_RW(bt_)->constructor(pop_);
+    } else {
+      pop_ = pmemobj_open(persistent_path_, file.c_str());
+      bt_ = POBJ_ROOT(pop_, btree);
+    }
+  } else {
+    persistent_path_ = "";
+  }
 
   if (type == HOTNODE) {
     string file = "log" + to_string(this->Id());

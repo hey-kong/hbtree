@@ -7,6 +7,7 @@
 #include "btree.h"
 #include "nvm_allocator.h"
 
+#define INNERNODE "InnerNode"
 #define HOTNODE "HotNode"
 #define COLDNODE "ColdNode"
 #define BTREEPATH "/pmem0/data/"

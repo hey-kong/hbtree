@@ -219,6 +219,11 @@ class Alex {
     create_superroot();
   }
 
+  void InitRootNode(InnerNode* node) {
+    auto empty_data_node = (data_node_type*)root_node_;
+    empty_data_node->inner_node = node;
+  }
+
   Alex(const Compare& comp, const Alloc& alloc = Alloc())
       : key_less_(comp), allocator_(alloc) {
     // Set up root as empty data node
