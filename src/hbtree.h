@@ -6,10 +6,9 @@
 
 #include "alex.h"
 #include "fixed_size_priority_queue.h"
-#include "inner_node.h"
 
 #define KEY_TYPE entry_key_t
-#define PAYLOAD_TYPE char *
+#define PAYLOAD_TYPE uint64_t
 #define OP_PERIOD 100
 #define HOT_NODE_NUM 1
 
@@ -27,9 +26,9 @@ class HBTree {
   void SwitchToCold(InnerNode *node);
   void SwitchToHot(InnerNode *node);
 
-  void insert(entry_key_t, char *);
-  void erase(entry_key_t);
-  char *search(entry_key_t);
+  void insert(KEY_TYPE, PAYLOAD_TYPE);
+  void erase(KEY_TYPE);
+  char *search(KEY_TYPE);
 };
 
 #endif  // _HBTREE_H_

@@ -21,6 +21,15 @@ HBTree::~HBTree() {}
 void HBTree::AdjustNodeType() {
   fixed_size_priority_queue<InnerNode *, HotDegreeCmp> q(HOT_NODE_NUM);
   for (auto node = dummy_->next; node != nullptr; node = node->next) {
+    while (node != nullptr && node->to_be_recycled()) {
+      node->prev->next = node->next;
+      if (node->next != nullptr) {
+        node->next->prev = node->prev;
+      }
+      auto tmp = node;
+      node = node->next;
+      delete tmp;
+    }
     node->UpdateHotDegree();
     q.push(node);
   }
@@ -50,8 +59,14 @@ void HBTree::SwitchToCold(InnerNode *node) {}
 
 void HBTree::SwitchToHot(InnerNode *node) {}
 
-void HBTree::insert(entry_key_t, char *) {}
+void HBTree::insert(KEY_TYPE key, PAYLOAD_TYPE value) { index_.insert(key, value); }
 
-void HBTree::erase(entry_key_t) {}
+void HBTree::erase(KEY_TYPE key) { index_.erase(key); }
 
-char *HBTree::search(entry_key_t) {}
+char *HBTree::search(KEY_TYPE key) { 
+  auto it = index_.find(key);
+  if (it == index_.end()) {
+    return nullptr;
+  }
+  return (char *)(it.payload());
+}

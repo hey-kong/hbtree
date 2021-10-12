@@ -8,7 +8,8 @@
  * of a B+ Tree)
  */
 
-#pragma once
+#ifndef _ALEX_NODES_H_
+#define _ALEX_NODES_H_
 
 #include "alex_base.h"
 #include "inner_node.h"
@@ -347,7 +348,7 @@ class AlexDataNode : public AlexNode<T, P> {
   double contraction_threshold_ =
       0;  // contract after m_num_keys is < this number
   static constexpr int kDefaultMaxDataNodeBytes_ =
-      1 << 24;  // by default, maximum data node size is 16MB
+      1 << 20;  // by default, maximum data node size is 1MB
   int max_slots_ =
       kDefaultMaxDataNodeBytes_ /
       sizeof(V);  // cannot expand beyond this number of key/data slots
@@ -2331,3 +2332,5 @@ class AlexDataNode : public AlexNode<T, P> {
   }
 };
 }  // namespace alex
+
+#endif  // _ALEX_NODES_H_

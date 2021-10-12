@@ -9,7 +9,8 @@
  *  does not return a reference.
  */
 
-#pragma once
+#ifndef _ALEX_MULTIMAP_H_
+#define _ALEX_MULTIMAP_H_
 
 #include "alex.h"
 
@@ -221,3 +222,5 @@ class AlexMultimap {
   const struct alex_impl::Stats& get_stats() const { return alex_.stats_; }
 };
 }
+
+#endif  // _ALEX_MULTIMAP_H_

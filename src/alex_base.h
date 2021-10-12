@@ -8,7 +8,8 @@
  * and other miscellaneous functions
  */
 
-#pragma once
+#ifndef _ALEX_BASE_H_
+#define _ALEX_BASE_H_
 
 #include <algorithm>
 #include <array>
@@ -186,12 +187,12 @@ inline int get_offset(int word_id, uint64_t bit) {
 /*** Cost model weights ***/
 
 // Intra-node cost weights
-double kExpSearchIterationsWeight = 20;
-double kShiftsWeight = 0.5;
+extern double kExpSearchIterationsWeight;
+extern double kShiftsWeight;
 
 // TraverseToLeaf cost weights
-double kNodeLookupsWeight = 20;
-double kModelSizeWeight = 5e-7;
+extern double kNodeLookupsWeight;
+extern double kModelSizeWeight;
 
 /*** Stat Accumulators ***/
 
@@ -255,7 +256,8 @@ class ExpectedShiftsAccumulator : public StatAccumulator {
   // Therefore, we track n^2/4.
   void accumulate(int actual_position, int) override {
     if (actual_position > last_position_ + 1) {
-      long long dense_region_length = last_position_ - dense_region_start_idx_ + 1;
+      long long dense_region_length =
+          last_position_ - dense_region_start_idx_ + 1;
       num_expected_shifts_ += (dense_region_length * dense_region_length) / 4;
       dense_region_start_idx_ = actual_position;
     }
@@ -266,7 +268,8 @@ class ExpectedShiftsAccumulator : public StatAccumulator {
   double get_stat() override {
     if (count_ == 0) return 0;
     // first need to accumulate statistics for current packed region
-    long long dense_region_length = last_position_ - dense_region_start_idx_ + 1;
+    long long dense_region_length =
+        last_position_ - dense_region_start_idx_ + 1;
     long long cur_num_expected_shifts =
         num_expected_shifts_ + (dense_region_length * dense_region_length) / 4;
     return cur_num_expected_shifts / static_cast<double>(count_);
@@ -299,7 +302,8 @@ class ExpectedIterationsAndShiftsAccumulator : public StatAccumulator {
         std::log2(std::abs(predicted_position - actual_position) + 1);
 
     if (actual_position > last_position_ + 1) {
-      long long dense_region_length = last_position_ - dense_region_start_idx_ + 1;
+      long long dense_region_length =
+          last_position_ - dense_region_start_idx_ + 1;
       num_expected_shifts_ += (dense_region_length * dense_region_length) / 4;
       dense_region_start_idx_ = actual_position;
     }
@@ -320,7 +324,8 @@ class ExpectedIterationsAndShiftsAccumulator : public StatAccumulator {
 
   double get_expected_num_shifts() {
     if (count_ == 0) return 0;
-    long long dense_region_length = last_position_ - dense_region_start_idx_ + 1;
+    long long dense_region_length =
+        last_position_ - dense_region_start_idx_ + 1;
     long long cur_num_expected_shifts =
         num_expected_shifts_ + (dense_region_length * dense_region_length) / 4;
     return cur_num_expected_shifts / static_cast<double>(count_);
@@ -385,7 +390,7 @@ class CPUID {
 };
 
 // https://en.wikipedia.org/wiki/CPUID#EAX=7,_ECX=0:_Extended_Features
-bool cpu_supports_bmi() {
-  return static_cast<bool>(CPUID(7, 0).EBX() & (1 << 3));
-}
-}
+extern bool cpu_supports_bmi();
+}  // namespace alex
+
+#endif  // _ALEX_BASE_H_

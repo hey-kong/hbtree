@@ -4,6 +4,7 @@ atomic<uint64_t> node_id;
 
 InnerNode::InnerNode(string type) {
   id_ = node_id.fetch_add(1, memory_order_relaxed);
+  to_be_recycled_ = false;
   cnt_ = 0;
   op_ = 0;
   hot_degree_ = 0;
@@ -81,13 +82,18 @@ char *InnerNode::search(entry_key_t key) {
   return D_RW(bt_)->btree_search(key);
 }
 
-void InnerNode::split(entry_key_t right_boundary) {
-  auto next_node = this->next;
+InnerNode *InnerNode::split(entry_key_t key) {
   auto new_node = new InnerNode(HOTNODE);
-  this->next = new_node;
+  auto next_node = this->next;
+  new_node->prev = this;
   new_node->next = next_node;
+  this->next = new_node;
+  if (next_node != nullptr) {
+    next_node->prev = new_node;
+  }
 
-  log_->Split(right_boundary, new_node);
+  log_->Split(key, new_node);
+  return new_node;
 }
 
 void InnerNode::printTree() { D_RW(bt_)->printAll(); }

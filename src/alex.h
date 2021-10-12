@@ -28,7 +28,8 @@
  * - bool operator != (const Iterator & rhs)
  */
 
-#pragma once
+#ifndef _ALEX_H_
+#define _ALEX_H_
 
 #include <fstream>
 #include <iostream>
@@ -604,6 +605,18 @@ class Alex {
     }
   }
 
+  void link_inner_nodes(const data_node_type* old_leaf,
+                        data_node_type* left_leaf, data_node_type* right_leaf,
+                        int right_boundary) {
+    std::cout << "link_inner_nodes" << std::endl;
+    auto key = old_leaf->key_slots_[right_boundary];
+    auto old_node = old_leaf->inner_node;
+    std::cout << key << std::endl;
+    auto new_node = old_node->split((entry_key_t)key);
+    left_leaf->inner_node = old_node;
+    right_leaf->inner_node = new_node;
+  }
+
   /*** Allocators and comparators ***/
 
  public:
@@ -628,6 +641,8 @@ class Alex {
     if (node == nullptr) {
       return;
     } else if (node->is_leaf_) {
+      auto data_node = static_cast<data_node_type*>(node);
+      data_node->inner_node->delete_node();
       data_node_allocator().destroy(static_cast<data_node_type*>(node));
       data_node_allocator().deallocate(static_cast<data_node_type*>(node), 1);
     } else {
@@ -1257,6 +1272,7 @@ class Alex {
         }
       }
     }
+    leaf->inner_node->insert(key, (char *)payload);
     stats_.num_inserts++;
     stats_.num_keys++;
     return {Iterator(leaf, insert_pos), true};
@@ -1730,6 +1746,8 @@ class Alex {
       parent->children_[i] = right_leaf;
     }
     link_data_nodes(old_node, left_leaf, right_leaf);
+    // Update InnerNode
+    link_inner_nodes(old_node, left_leaf, right_leaf, right_boundary);
   }
 
   // Create new data nodes from the keys in the old data node according to the
@@ -2177,6 +2195,7 @@ class Alex {
   int erase(const T& key) {
     data_node_type* leaf = get_leaf(key);
     int num_erased = leaf->erase(key);
+    leaf->inner_node->erase(key);
     stats_.num_keys -= num_erased;
     if (leaf->num_keys_ == 0) {
       merge(leaf, key);
@@ -3004,3 +3023,5 @@ class Alex {
   };
 };
 }  // namespace alex
+
+#endif  // _ALEX_H_

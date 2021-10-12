@@ -7,7 +7,8 @@
  * during bulk loading and node splitting.
  */
 
-#pragma once
+#ifndef _ALEX_FANOUT_TREE_H_
+#define _ALEX_FANOUT_TREE_H_
 
 #include "alex_base.h"
 #include "alex_nodes.h"
@@ -35,25 +36,9 @@ struct FTNode {
 /*** Helpers ***/
 
 // Collect all used fanout tree nodes and sort them
-void collect_used_nodes(const std::vector<std::vector<FTNode>>& fanout_tree,
-                        int max_level,
-                        std::vector<FTNode>& used_fanout_tree_nodes) {
-  max_level = std::min(max_level, static_cast<int>(fanout_tree.size()) - 1);
-  for (int i = 0; i <= max_level; i++) {
-    auto& level = fanout_tree[i];
-    for (const FTNode& tree_node : level) {
-      if (tree_node.use) {
-        used_fanout_tree_nodes.push_back(tree_node);
-      }
-    }
-  }
-  std::sort(used_fanout_tree_nodes.begin(), used_fanout_tree_nodes.end(),
-            [&](FTNode& left, FTNode& right) {
-              // this is better than comparing boundary locations
-              return (left.node_id << (max_level - left.level)) <
-                     (right.node_id << (max_level - right.level));
-            });
-}
+extern void collect_used_nodes(
+    const std::vector<std::vector<FTNode>>& fanout_tree, int max_level,
+    std::vector<FTNode>& used_fanout_tree_nodes);
 
 // Starting from a complete fanout tree of a certain depth, merge tree nodes
 // upwards if doing so decreases the cost.
@@ -448,3 +433,5 @@ int find_best_fanout_existing_node(const AlexModelNode<T, P>* parent,
 }  // namespace fanout_tree
 
 }  // namespace alex
+
+#endif  // _ALEX_FANOUT_TREE_H_

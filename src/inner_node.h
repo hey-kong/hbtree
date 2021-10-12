@@ -25,6 +25,7 @@ extern atomic<uint64_t> node_id;
 class InnerNode {
  protected:
   uint64_t id_;
+  bool to_be_recycled_;
   int cnt_;
   entry_key_t min_key_;
   int op_;
@@ -50,6 +51,8 @@ class InnerNode {
 
   uint64_t Id() { return this->id_; }
   string type() { return this->type_; }
+  void delete_node() { this->to_be_recycled_ = true; }
+  bool to_be_recycled() { return this->to_be_recycled_; }
 
   void UpdateHotDegree() { hot_degree_ = DECAY * hot_degree_ + op_; }
   double GetHotDegree() { return hot_degree_; }
@@ -57,7 +60,7 @@ class InnerNode {
   void insert(entry_key_t, char *);
   void erase(entry_key_t);
   char *search(entry_key_t);
-  void split(entry_key_t);
+  InnerNode *split(entry_key_t);
 
   void printTree();
 };
