@@ -605,16 +605,25 @@ class Alex {
     }
   }
 
-  void link_inner_nodes(const data_node_type* old_leaf,
-                        data_node_type* left_leaf, data_node_type* right_leaf,
-                        int right_boundary) {
-    std::cout << "link_inner_nodes" << std::endl;
-    auto key = old_leaf->key_slots_[right_boundary];
+  void link_two_inner_nodes(const data_node_type* old_leaf,
+                            data_node_type* left_leaf,
+                            data_node_type* right_leaf, int right_boundary) {
+    auto key = old_leaf->get_key(right_boundary);
     auto old_node = old_leaf->inner_node;
-    std::cout << key << std::endl;
-    auto new_node = old_node->split((entry_key_t)key);
+    auto new_node = old_node->split(key);
     left_leaf->inner_node = old_node;
     right_leaf->inner_node = new_node;
+  }
+
+  void link_inner_nodes(const data_node_type* old_leaf,
+                        data_node_type* cur_leaf,
+                        std::vector<T>& boundary_keys) {
+    auto old_node = old_leaf->inner_node;
+    for (int i = boundary_keys.size() - 1; i >= 0; i--) {
+      auto new_node = old_node->split(boundary_keys[i]);
+      cur_leaf->inner_node = new_node;
+      cur_leaf = cur_leaf->prev_leaf_;
+    }
   }
 
   /*** Allocators and comparators ***/
@@ -1272,7 +1281,7 @@ class Alex {
         }
       }
     }
-    leaf->inner_node->insert(key, (char *)payload);
+    leaf->inner_node->insert(key, (char*)payload);
     stats_.num_inserts++;
     stats_.num_keys++;
     return {Iterator(leaf, insert_pos), true};
@@ -1747,7 +1756,7 @@ class Alex {
     }
     link_data_nodes(old_node, left_leaf, right_leaf);
     // Update InnerNode
-    link_inner_nodes(old_node, left_leaf, right_leaf, right_boundary);
+    link_two_inner_nodes(old_node, left_leaf, right_leaf, right_boundary);
   }
 
   // Create new data nodes from the keys in the old data node according to the
@@ -1775,6 +1784,7 @@ class Alex {
         old_node->prev_leaf_;  // used for linking the new data nodes
     int left_boundary = 0;
     int right_boundary = 0;
+    std::vector<T> boundary_keys;
     // Keys may be re-assigned to an adjacent fanout tree node due to off-by-one
     // errors
     int num_reassigned_keys = 0;
@@ -1805,6 +1815,7 @@ class Alex {
       data_node_type* child_node = bulk_load_leaf_node_from_existing(
           old_node, left_boundary, right_boundary, false, &tree_node, false,
           keep_left, keep_right);
+      boundary_keys.push_back(old_node->get_key(left_boundary));
       child_node->level_ = static_cast<short>(parent->level_ + 1);
       child_node->cost_ = tree_node.cost;
       child_node->duplication_factor_ = duplication_factor;
@@ -1825,6 +1836,8 @@ class Alex {
     if (old_node->next_leaf_ != nullptr) {
       old_node->next_leaf_->prev_leaf_ = prev_leaf;
     }
+    // Update InnerNode
+    link_inner_nodes(old_node, prev_leaf, boundary_keys);
   }
 
   // Splits the data node in two and propagates the split upwards along the
