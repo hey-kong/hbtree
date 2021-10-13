@@ -726,15 +726,15 @@ class page {
                 }
               }
             }
+          }
 
-            if ((tmp_key = current->records[0].key) >= start) {
-              if ((tmp_ptr = current->records[0].ptr) != NULL) {
-                if (tmp_key == current->records[0].key) {
-                  if (tmp_ptr) {
-                    keys[off] = tmp_key;
-                    vals[off++] = (unsigned long)tmp_ptr;
-                    cnt++;
-                  }
+          if ((tmp_key = current->records[0].key) >= start) {
+            if ((tmp_ptr = current->records[0].ptr) != NULL) {
+              if (tmp_key == current->records[0].key) {
+                if (tmp_ptr) {
+                  keys[off] = tmp_key;
+                  vals[off++] = (unsigned long)tmp_ptr;
+                  cnt++;
                 }
               }
             }

@@ -13,12 +13,11 @@
 #define HOT_NODE_NUM 1
 
 class HBTree {
- private:
+ public:
   alex::Alex<KEY_TYPE, PAYLOAD_TYPE> index_;
   InnerNode *dummy_;
   int ops_;
 
- public:
   HBTree();
   ~HBTree();
 

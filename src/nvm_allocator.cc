@@ -18,15 +18,17 @@ void NVMLogFile::worker() {
     } else if (tmp->type == logWriteType) {
       D_RW(bt_)->btree_insert(tmp->key, (char *)tmp->value);
     } else if (tmp->type == logSplitType) {
+      unique_lock<mutex> lck(split_mut_);
       entry_key_t keys[BTREEITEMS];
       unsigned long vals[BTREEITEMS];
-      int cnt;
+      int cnt = 0;
       D_RW(bt_)->btree_search_to_end(tmp->key, keys, vals, cnt);
       InnerNode *new_node = (InnerNode *)tmp->value;
       for (int i = 0; i < cnt; i++) {
         new_node->insert(keys[i], (char *)vals[i]);
       }
-      // TODO: Notification required.
+      split_ = true;
+      split_cv_.notify_one();
       for (int i = 0; i < cnt; i++) {
         D_RW(bt_)->btree_delete(keys[i]);
       }
@@ -120,7 +122,10 @@ char *NVMLogFile::Split(entry_key_t right_boundary, InnerNode *new_node) {
   node.key = right_boundary;
   node.value = (uint64_t)new_node;
   memcpy(log, &node, LOGNODEBYTES);
+  unique_lock<mutex> lck(split_mut_);
+  split_ = false;
   nvm_persist(log, LOGNODEBYTES);
+  while (!split_) split_cv_.wait(lck);
   return this->cur_addr_;
 }
 

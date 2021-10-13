@@ -34,6 +34,11 @@ class NVMLogFile : public Daemon {
   mutex mut_;
   TOID(btree) bt_;
 
+  // For notification
+  mutex split_mut_;
+  condition_variable split_cv_;
+  bool split_;
+
   void worker();
 
  public:
