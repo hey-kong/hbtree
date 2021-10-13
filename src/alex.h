@@ -605,27 +605,6 @@ class Alex {
     }
   }
 
-  void link_two_inner_nodes(const data_node_type* old_leaf,
-                            data_node_type* left_leaf,
-                            data_node_type* right_leaf, int right_boundary) {
-    auto key = old_leaf->get_key(right_boundary);
-    auto old_node = old_leaf->inner_node;
-    auto new_node = old_node->split(key);
-    left_leaf->inner_node = old_node;
-    right_leaf->inner_node = new_node;
-  }
-
-  void link_inner_nodes(const data_node_type* old_leaf,
-                        data_node_type* cur_leaf,
-                        std::vector<T>& boundary_keys) {
-    auto old_node = old_leaf->inner_node;
-    for (int i = boundary_keys.size() - 1; i >= 0; i--) {
-      auto new_node = old_node->split(boundary_keys[i]);
-      cur_leaf->inner_node = new_node;
-      cur_leaf = cur_leaf->prev_leaf_;
-    }
-  }
-
   /*** Allocators and comparators ***/
 
  public:
@@ -1512,6 +1491,7 @@ class Alex {
     if (expand_left) {
       T left_boundary_value = istats_.key_domain_min_;
       int left_boundary = outermost_node->lower_bound(left_boundary_value);
+      std::vector<T> boundary_keys;
       data_node_type* next = outermost_node;
       for (int i = new_nodes_end; i > new_nodes_start; i -= n) {
         if (i <= in_bounds_new_nodes_start) {
@@ -1527,6 +1507,7 @@ class Alex {
         }
         data_node_type* new_node = bulk_load_leaf_node_from_existing(
             outermost_node, left_boundary, right_boundary, true);
+        boundary_keys.push_back(outermost_node->get_key(right_boundary));
         new_node->level_ = static_cast<short>(root->level_ + 1);
         new_node->duplication_factor_ = new_node_duplication_factor;
         if (next) {
@@ -1538,9 +1519,21 @@ class Alex {
           root->children_[j] = new_node;
         }
       }
+      // Update InnerNode
+      if (boundary_keys.size() > 0) {
+        auto old_inner_node = outermost_node->inner_node;
+        next = outermost_node;
+        for (int i = 0; i < boundary_keys.size(); i--) {
+          auto new_inner_node = old_inner_node->split(boundary_keys[i]);
+          next->inner_node = new_inner_node;
+          next = next->prev_leaf_;
+        }
+        next->inner_node = old_inner_node;
+      }
     } else {
       T right_boundary_value = istats_.key_domain_max_;
       int right_boundary = outermost_node->lower_bound(right_boundary_value);
+      std::vector<T> boundary_keys;
       data_node_type* prev = nullptr;
       for (int i = new_nodes_start; i < new_nodes_end; i += n) {
         if (i >= in_bounds_new_nodes_end) {
@@ -1556,6 +1549,7 @@ class Alex {
         }
         data_node_type* new_node = bulk_load_leaf_node_from_existing(
             outermost_node, left_boundary, right_boundary, true);
+        boundary_keys.push_back(outermost_node->get_key(left_boundary));
         new_node->level_ = static_cast<short>(root->level_ + 1);
         new_node->duplication_factor_ = new_node_duplication_factor;
         if (prev) {
@@ -1565,6 +1559,15 @@ class Alex {
         prev = new_node;
         for (int j = i; j < i + n; j++) {
           root->children_[j] = new_node;
+        }
+      }
+      // Update InnerNode
+      if (boundary_keys.size() > 0) {
+        auto old_inner_node = outermost_node->inner_node;
+        for (int i = boundary_keys.size() - 1; i > 0; i--) {
+          auto new_inner_node = old_inner_node->split(boundary_keys[i]);
+          prev->inner_node = new_inner_node;
+          prev = prev->prev_leaf_;
         }
       }
     }
@@ -1756,7 +1759,10 @@ class Alex {
     }
     link_data_nodes(old_node, left_leaf, right_leaf);
     // Update InnerNode
-    link_two_inner_nodes(old_node, left_leaf, right_leaf, right_boundary);
+    auto old_inner_node = old_node->inner_node;
+    auto new_inner_node = old_inner_node->split(old_node->get_key(right_boundary));
+    left_leaf->inner_node = old_inner_node;
+    right_leaf->inner_node = new_inner_node;
   }
 
   // Create new data nodes from the keys in the old data node according to the
@@ -1837,7 +1843,12 @@ class Alex {
       old_node->next_leaf_->prev_leaf_ = prev_leaf;
     }
     // Update InnerNode
-    link_inner_nodes(old_node, prev_leaf, boundary_keys);
+    auto old_inner_node = old_node->inner_node;
+    for (int i = boundary_keys.size() - 1; i >= 0; i--) {
+      auto new_inner_node = old_inner_node->split(boundary_keys[i]);
+      prev_leaf->inner_node = new_inner_node;
+      prev_leaf = prev_leaf->prev_leaf_;
+    }
   }
 
   // Splits the data node in two and propagates the split upwards along the
