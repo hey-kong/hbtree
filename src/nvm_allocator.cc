@@ -122,10 +122,12 @@ char *NVMLogFile::Split(entry_key_t right_boundary, InnerNode *new_node) {
   node.key = right_boundary;
   node.value = (uint64_t)new_node;
   memcpy(log, &node, LOGNODEBYTES);
+  timer.start();
   unique_lock<mutex> lck(split_mut_);
   split_ = false;
   nvm_persist(log, LOGNODEBYTES);
   while (!split_) split_cv_.wait(lck);
+  timer.printElapsed();
   return this->cur_addr_;
 }
 

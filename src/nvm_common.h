@@ -14,14 +14,14 @@ static inline void nvm_memcpy_persist(void *pmemdest, const void *src,
   pmem_memcpy_persist(pmemdest, src, len);
 }
 
-#define LOGNODEBYTES 16
-#define LOGNODEBITS (16 * 8)
+#define LOGNODEBYTES 24
+#define LOGNODEBITS (24 * 8)
 
 const uint64_t Hollow = (4 << 10);
 
 struct LogNode {
-  uint64_t type : 2;
-  uint64_t key : 62;
+  uint64_t type;
+  uint64_t key;
   uint64_t value;
 };
 

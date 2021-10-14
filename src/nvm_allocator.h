@@ -14,6 +14,7 @@
 #include "btree.h"
 #include "daemon.h"
 #include "nvm_common.h"
+#include "timer_clock.h"
 
 using entry_key_t = int64_t;
 
@@ -38,6 +39,10 @@ class NVMLogFile : public Daemon {
   mutex split_mut_;
   condition_variable split_cv_;
   bool split_;
+
+  // For statistics
+  Time::TimerClockMs timer;
+  Time::TimerClockMs timer_daemon;
 
   void worker();
 
