@@ -46,8 +46,8 @@ InnerNode::InnerNode(string type) {
 }
 
 InnerNode::~InnerNode() {
-  delete prev;
-  delete next;
+  prev = nullptr;
+  next = nullptr;
   pmemobj_close(pop_);
 
   if (this->type() == HOTNODE) {

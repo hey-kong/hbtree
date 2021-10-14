@@ -21,6 +21,7 @@ class HBTree {
   HBTree();
   ~HBTree();
 
+  void Recycle();
   void AdjustNodeType();
   void SwitchToCold(InnerNode *node);
   void SwitchToHot(InnerNode *node);

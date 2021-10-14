@@ -18,6 +18,20 @@ HBTree::HBTree() {
 
 HBTree::~HBTree() {}
 
+void HBTree::Recycle() {
+  for (auto node = dummy_->next; node != nullptr; node = node->next) {
+    while (node != nullptr && node->to_be_recycled()) {
+      node->prev->next = node->next;
+      if (node->next != nullptr) {
+        node->next->prev = node->prev;
+      }
+      auto tmp = node;
+      node = node->next;
+      delete tmp;
+    }
+  }
+}
+
 void HBTree::AdjustNodeType() {
   fixed_size_priority_queue<InnerNode *, HotDegreeCmp> q(HOT_NODE_NUM);
   for (auto node = dummy_->next; node != nullptr; node = node->next) {
