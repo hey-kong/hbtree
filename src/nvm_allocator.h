@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <condition_variable>
 #include <cstring>
 #include <mutex>
 #include <string>
@@ -27,7 +28,6 @@ class NVMLogFile : public Daemon {
   size_t mapped_len_;
   int is_pmem_;
   char *pmem_addr_;
-  char *begin_addr_;
   char *apply_addr_;
   char *cur_addr_;
   uint64_t capacity_;
@@ -50,7 +50,6 @@ class NVMLogFile : public Daemon {
   NVMLogFile(const string path, size_t size, TOID(btree) bt);
   ~NVMLogFile();
 
-  char *GetBeginAddr();
   char *GetPmemAddr();
   void Reset();
   bool IsFoot(char *);

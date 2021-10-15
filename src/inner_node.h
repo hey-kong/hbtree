@@ -12,7 +12,7 @@
 #define COLDNODE "ColdNode"
 #define BTREEPATH "/pmem0/data/"
 #define LOGPATH "/pmem0/log/"
-#define LOGSIZE (1024 + (4 << 10))
+#define LOGSIZE (24 << 10)
 #define DECAY 0.2
 
 /*
