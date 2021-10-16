@@ -1736,8 +1736,8 @@ class Alex {
     link_data_nodes(old_node, left_leaf, right_leaf);
     // Update InnerNode
     auto old_inner_node = old_node->inner_node;
-    auto new_inner_node =
-        old_inner_node->split(old_node->get_key(right_boundary));
+    auto new_inner_node = old_inner_node->split(
+        old_node->get_key(right_boundary), old_node->last_key());
     left_leaf->inner_node = old_inner_node;
     right_leaf->inner_node = new_inner_node;
   }
@@ -1767,7 +1767,7 @@ class Alex {
         old_node->prev_leaf_;  // used for linking the new data nodes
     int left_boundary = 0;
     int right_boundary = 0;
-    std::vector<T> left_keys;
+    std::vector<T> left_boundaries;
     // Keys may be re-assigned to an adjacent fanout tree node due to off-by-one
     // errors
     int num_reassigned_keys = 0;
@@ -1798,7 +1798,7 @@ class Alex {
       data_node_type* child_node = bulk_load_leaf_node_from_existing(
           old_node, left_boundary, right_boundary, false, &tree_node, false,
           keep_left, keep_right);
-      left_keys.push_back(old_node->get_key(left_boundary));
+      left_boundaries.push_back(left_boundary);
       child_node->level_ = static_cast<short>(parent->level_ + 1);
       child_node->cost_ = tree_node.cost;
       child_node->duplication_factor_ = duplication_factor;
@@ -1821,10 +1821,13 @@ class Alex {
     }
     // Update InnerNode
     auto old_inner_node = old_node->inner_node;
-    for (int i = left_keys.size() - 1; i >= 0; i--) {
-      auto new_inner_node = old_inner_node->split(left_keys[i]);
+    int right_key = old_node->last_key();
+    for (int i = left_boundaries.size() - 1; i >= 0; i--) {
+      auto new_inner_node = old_inner_node->split(
+          old_node->get_key(left_boundaries[i]), right_key);
       prev_leaf->inner_node = new_inner_node;
       prev_leaf = prev_leaf->prev_leaf_;
+      right_key = old_node->get_key(left_boundaries[i] - 1);
     }
   }
 

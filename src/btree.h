@@ -69,7 +69,8 @@ class btree {
                              bool *, page **);
   char *btree_search(entry_key_t);
   void btree_search_range(entry_key_t, entry_key_t, unsigned long *);
-  void btree_search_to_end(entry_key_t, entry_key_t *, unsigned long *, int &);
+  void btree_search_range(entry_key_t, entry_key_t, entry_key_t *,
+                          unsigned long *, int &);
   void printAll();
   void randScounter();
 
@@ -670,8 +671,8 @@ class page {
     }
   }
 
-  void linear_search_to_end(entry_key_t start, entry_key_t *keys,
-                            unsigned long *vals, int &cnt) {
+  void linear_search_range(entry_key_t min, entry_key_t max, entry_key_t *keys,
+                           unsigned long *vals, int &cnt) {
     int i, off = 0;
     uint8_t previous_switch_counter;
     page *current = this;
@@ -686,38 +687,64 @@ class page {
         char *tmp_ptr;
 
         if (IS_FORWARD(previous_switch_counter)) {
-          if ((tmp_key = current->records[0].key) >= start) {
-            if ((tmp_ptr = current->records[0].ptr) != NULL) {
-              if (tmp_key == current->records[0].key) {
-                if (tmp_ptr) {
-                  keys[off] = tmp_key;
-                  vals[off++] = (unsigned long)tmp_ptr;
-                  cnt++;
-                }
-              }
-            }
-          }
-
-          for (i = 1; current->records[i].ptr != NULL; ++i) {
-            if ((tmp_key = current->records[i].key) >= start) {
-              if ((tmp_ptr = current->records[i].ptr) !=
-                  current->records[i - 1].ptr) {
-                if (tmp_key == current->records[i].key) {
+          if ((tmp_key = current->records[0].key) >= min) {
+            if (tmp_key <= max) {
+              if ((tmp_ptr = current->records[0].ptr) != NULL) {
+                if (tmp_key == current->records[0].key) {
                   if (tmp_ptr) {
                     keys[off] = tmp_key;
                     vals[off++] = (unsigned long)tmp_ptr;
                     cnt++;
                   }
                 }
+              }
+            } else {
+              return;
+            }
+          }
+
+          for (i = 1; current->records[i].ptr != NULL; ++i) {
+            if ((tmp_key = current->records[i].key) >= min) {
+              if (tmp_key <= max) {
+                if ((tmp_ptr = current->records[i].ptr) !=
+                    current->records[i - 1].ptr) {
+                  if (tmp_key == current->records[i].key) {
+                    if (tmp_ptr) {
+                      keys[off] = tmp_key;
+                      vals[off++] = (unsigned long)tmp_ptr;
+                      cnt++;
+                    }
+                  }
+                }
+              } else {
+                return;
               }
             }
           }
         } else {
           for (i = current->count() - 1; i > 0; --i) {
-            if ((tmp_key = current->records[i].key) >= start) {
-              if ((tmp_ptr = current->records[i].ptr) !=
-                  current->records[i - 1].ptr) {
-                if (tmp_key == current->records[i].key) {
+            if ((tmp_key = current->records[i].key) >= min) {
+              if (tmp_key <= max) {
+                if ((tmp_ptr = current->records[i].ptr) !=
+                    current->records[i - 1].ptr) {
+                  if (tmp_key == current->records[i].key) {
+                    if (tmp_ptr) {
+                      keys[off] = tmp_key;
+                      vals[off++] = (unsigned long)tmp_ptr;
+                      cnt++;
+                    }
+                  }
+                }
+              } else {
+                return;
+              }
+            }
+          }
+
+          if ((tmp_key = current->records[0].key) >= min) {
+            if (tmp_key <= max) {
+              if ((tmp_ptr = current->records[0].ptr) != NULL) {
+                if (tmp_key == current->records[0].key) {
                   if (tmp_ptr) {
                     keys[off] = tmp_key;
                     vals[off++] = (unsigned long)tmp_ptr;
@@ -725,18 +752,8 @@ class page {
                   }
                 }
               }
-            }
-          }
-
-          if ((tmp_key = current->records[0].key) >= start) {
-            if ((tmp_ptr = current->records[0].ptr) != NULL) {
-              if (tmp_key == current->records[0].key) {
-                if (tmp_ptr) {
-                  keys[off] = tmp_key;
-                  vals[off++] = (unsigned long)tmp_ptr;
-                  cnt++;
-                }
-              }
+            } else {
+              return;
             }
           }
         }

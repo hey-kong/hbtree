@@ -57,7 +57,7 @@ class NVMLogFile : public Daemon {
 
   char *Write(entry_key_t, char *);
   char *Delete(entry_key_t);
-  char *Split(entry_key_t, InnerNode *);
+  char *Split(entry_key_t, entry_key_t, InnerNode *);
   void Recovery(NVMLogFile *);
 };
 

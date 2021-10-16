@@ -21,6 +21,6 @@ struct LogNode {
   uint64_t value;
 };
 
-enum LogType { logDeleteType = 0, logWriteType = 1, logSplitType = 2 };
+enum LogType { logDeleteType = 0, logWriteType = 1 };
 
 #endif  // _NVM_COMMON_H_

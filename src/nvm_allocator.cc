@@ -17,19 +17,21 @@ void NVMLogFile::worker() {
       D_RW(bt_)->btree_delete(tmp->key);
     } else if (tmp->type == logWriteType) {
       D_RW(bt_)->btree_insert(tmp->key, (char *)tmp->value);
-    } else if (tmp->type == logSplitType) {
-      unique_lock<mutex> lck(split_mut_);
+    } else {
+      int cnt = 0;
       entry_key_t keys[BTREEITEMS];
       unsigned long vals[BTREEITEMS];
-      int cnt = 0;
-      D_RW(bt_)->btree_search_to_end(tmp->key, keys, vals, cnt);
-      InnerNode *new_node = reinterpret_cast<InnerNode *>(tmp->value);
-      for (int i = 0; i < cnt; i++) {
-        new_node->insert(keys[i], (char *)vals[i]);
+      D_RW(bt_)->btree_search_range(tmp->key, tmp->value, keys, vals, cnt);
+      {
+        unique_lock<mutex> lck(split_mut_);
+        InnerNode *new_node = reinterpret_cast<InnerNode *>(tmp->type);
+        for (int i = 0; i < cnt; i++) {
+          new_node->insert(keys[i], (char *)vals[i]);
+        }
+        split_ = true;
+        split_cv_.notify_all();
       }
-      split_ = true;
-      split_cv_.notify_all();
-      for (int i = 0; i < cnt; i++) {
+      for (int i = cnt - 1; i >= 0; i--) {
         D_RW(bt_)->btree_delete(keys[i]);
       }
     }
@@ -111,12 +113,12 @@ char *NVMLogFile::Delete(entry_key_t key) {
   return log;
 }
 
-char *NVMLogFile::Split(entry_key_t right_boundary, InnerNode *new_node) {
+char *NVMLogFile::Split(entry_key_t min, entry_key_t max, InnerNode *new_node) {
   char *log = this->AllocateAligned();
   LogNode node;
-  node.type = logSplitType;
-  node.key = right_boundary;
-  node.value = reinterpret_cast<uint64_t>(new_node);
+  node.type = reinterpret_cast<uint64_t>(new_node);
+  node.key = min;
+  node.value = max;
   timer.start();
   unique_lock<mutex> lck(split_mut_);
   split_ = false;

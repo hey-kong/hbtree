@@ -60,7 +60,7 @@ class InnerNode {
   void insert(entry_key_t, char *);
   void erase(entry_key_t);
   char *search(entry_key_t);
-  InnerNode *split(entry_key_t);
+  InnerNode *split(entry_key_t, entry_key_t);
 
   void printTree();
 };

@@ -82,7 +82,7 @@ char *InnerNode::search(entry_key_t key) {
   return D_RW(bt_)->btree_search(key);
 }
 
-InnerNode *InnerNode::split(entry_key_t key) {
+InnerNode *InnerNode::split(entry_key_t min, entry_key_t max) {
   auto new_node = new InnerNode(HOTNODE);
   auto next_node = this->next;
   new_node->prev = this;
@@ -92,7 +92,7 @@ InnerNode *InnerNode::split(entry_key_t key) {
     next_node->prev = new_node;
   }
 
-  log_->Split(key, new_node);
+  log_->Split(min, max, new_node);
   return new_node;
 }
 
