@@ -630,7 +630,9 @@ class Alex {
       return;
     } else if (node->is_leaf_) {
       auto data_node = static_cast<data_node_type*>(node);
-      data_node->inner_node->delete_node();
+      if (data_node->inner_node != nullptr) {
+        data_node->inner_node->delete_node();
+      }
       data_node_allocator().destroy(static_cast<data_node_type*>(node));
       data_node_allocator().deallocate(static_cast<data_node_type*>(node), 1);
     } else {
@@ -1260,7 +1262,9 @@ class Alex {
         }
       }
     }
-    leaf->inner_node->insert(key, (char*)payload);
+    if (leaf->inner_node != nullptr) {
+      leaf->inner_node->insert(key, reinterpret_cast<char*>(payload));
+    }
     stats_.num_inserts++;
     stats_.num_keys++;
     return {Iterator(leaf, insert_pos), true};
@@ -2199,7 +2203,9 @@ class Alex {
   int erase(const T& key) {
     data_node_type* leaf = get_leaf(key);
     int num_erased = leaf->erase(key);
-    leaf->inner_node->erase(key);
+    if (leaf->inner_node != nullptr) {
+      leaf->inner_node->erase(key);
+    }
     stats_.num_keys -= num_erased;
     if (leaf->num_keys_ == 0) {
       merge(leaf, key);

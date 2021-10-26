@@ -33,3 +33,7 @@
 
 # VSCode
 .vscode
+
+# Output
+src/alex
+src/hbtree
