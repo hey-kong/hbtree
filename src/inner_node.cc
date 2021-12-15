@@ -58,7 +58,6 @@ InnerNode::~InnerNode() {
 void InnerNode::insert(entry_key_t key, char *value) {
   if (this->type() == HOTNODE) {
     log_->Write(key, value);
-    data_array[key] = value;
   } else {
     D_RW(bt_)->btree_insert(key, value);
   }
@@ -68,7 +67,6 @@ void InnerNode::insert(entry_key_t key, char *value) {
 void InnerNode::erase(entry_key_t key) {
   if (this->type() == HOTNODE) {
     log_->Delete(key);
-    data_array.erase(key);
   } else {
     D_RW(bt_)->btree_delete(key);
   }
@@ -76,9 +74,6 @@ void InnerNode::erase(entry_key_t key) {
 }
 
 char *InnerNode::search(entry_key_t key) {
-  if (this->type() == HOTNODE) {
-    return data_array[key];
-  }
   return D_RW(bt_)->btree_search(key);
 }
 

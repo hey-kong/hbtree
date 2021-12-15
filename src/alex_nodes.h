@@ -11,7 +11,7 @@
 #ifndef _ALEX_NODES_H_
 #define _ALEX_NODES_H_
 
-#include "alex_base.h"
+#include "alex_base_node.h"
 #include "inner_node.h"
 
 // Whether we store key and payload arrays separately in data nodes
@@ -33,38 +33,6 @@
 #define ALEX_USE_LZCNT 1
 
 namespace alex {
-
-// A parent class for both types of ALEX nodes
-template <class T, class P>
-class AlexNode {
- public:
-  // Whether this node is a leaf (data) node
-  bool is_leaf_ = false;
-
-  // Power of 2 to which the pointer to this node is duplicated in its parent
-  // model node
-  // For example, if duplication_factor_ is 3, then there are 8 redundant
-  // pointers to this node in its parent
-  uint8_t duplication_factor_ = 0;
-
-  // Node's level in the RMI. Root node is level 0
-  short level_ = 0;
-
-  // Both model nodes and data nodes nodes use models
-  LinearModel<T> model_;
-
-  // Could be either the expected or empirical cost, depending on how this field
-  // is used
-  double cost_ = 0.0;
-
-  AlexNode() = default;
-  explicit AlexNode(short level) : level_(level) {}
-  AlexNode(short level, bool is_leaf) : is_leaf_(is_leaf), level_(level) {}
-  virtual ~AlexNode() = default;
-
-  // The size in bytes of all member variables in this class
-  virtual long long node_size() const = 0;
-};
 
 template <class T, class P, class Alloc = std::allocator<std::pair<T, P>>>
 class AlexModelNode : public AlexNode<T, P> {
@@ -317,6 +285,7 @@ class AlexDataNode : public AlexNode<T, P> {
 
   // For updating B+Tree in NVM
   InnerNode* inner_node = nullptr;
+  bool is_cold_ = false;
 
 #if ALEX_DATA_NODE_SEP_ARRAYS
   T* key_slots_ = nullptr;  // holds keys
@@ -506,6 +475,28 @@ class AlexDataNode : public AlexNode<T, P> {
     int bitmap_pos = pos >> 6;
     int bit_pos = pos - (bitmap_pos << 6);
     bitmap_[bitmap_pos] &= ~(1ULL << bit_pos);
+  }
+
+  // For updating B+Tree in NVM
+  bool is_cold() const { return is_cold_; }
+
+  void switch_to_cold() {
+    is_cold = true;
+    if (key_slots_ == nullptr) {
+      return;
+    }
+    key_allocator().deallocate(key_slots_, data_capacity_);
+    payload_allocator().deallocate(payload_slots_, data_capacity_);
+    bitmap_allocator().deallocate(bitmap_, bitmap_size_);
+    is_cold_ = true;
+  }
+
+  void switch_to_hot(const V values[], int num_keys) {
+    // TODO: Wait for all logs to be applied, read from B+Tree
+    reset_stats();
+    // TODO: bulk_load may be useful only when the index is empty
+    bulk_load(values, num_keys, false, true);
+    is_cold_ = false;
   }
 
   // Value of first (i.e., min) key

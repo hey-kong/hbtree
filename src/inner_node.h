@@ -36,8 +36,6 @@ class InnerNode {
   string type_;
 
   // HotNode
-  // TODO: Switch the type of data_array.
-  map<entry_key_t, char *> data_array;
   const char *log_path_;
   NVMLogFile *log_;
 

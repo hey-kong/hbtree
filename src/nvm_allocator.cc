@@ -24,8 +24,10 @@ void NVMLogFile::worker() {
       D_RW(bt_)->btree_search_range(tmp->key, tmp->value, keys, vals, cnt);
       {
         unique_lock<mutex> lck(split_mut_);
+        // Here we get the new inner node address, and insert a batch of data into the new node
         InnerNode *new_node = reinterpret_cast<InnerNode *>(tmp->type);
         for (int i = 0; i < cnt; i++) {
+          // Since only hot nodes split, only writing logs is required in this call
           new_node->insert(keys[i], (char *)vals[i]);
         }
         split_ = true;

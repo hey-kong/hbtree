@@ -629,6 +629,7 @@ class Alex {
     if (node == nullptr) {
       return;
     } else if (node->is_leaf_) {
+      std::cout << "call delete_node" << std::endl;
       auto data_node = static_cast<data_node_type*>(node);
       if (data_node->inner_node != nullptr) {
         data_node->inner_node->delete_node();
@@ -917,6 +918,14 @@ class Alex {
   typename self_type::Iterator find(const T& key) {
     stats_.num_lookups++;
     data_node_type* leaf = get_leaf(key);
+
+    if (leaf->inner_node != nullptr) {
+      if (leaf->is_cold()) {
+        // If inner node of the leaf is cold, then data cannot be found in leaf
+        return Iterator(leaf, -1);
+      }
+    }
+
     int idx = leaf->find_key(key);
     if (idx < 0) {
       return end();
@@ -1154,6 +1163,14 @@ class Alex {
 
     data_node_type* leaf = get_leaf(key);
 
+    if (leaf->inner_node != nullptr) {
+      leaf->inner_node->insert(key, reinterpret_cast<char*>(payload));
+      if (leaf->is_cold()) {
+        // In the cold node, data has been written to NVM
+        return {Iterator(leaf, -1), false};
+      }
+    }
+
     // Nonzero fail flag means that the insert did not happen
     std::pair<int, int> ret = leaf->insert(key, payload);
     int fail = ret.first;
@@ -1261,9 +1278,6 @@ class Alex {
           return {Iterator(leaf, insert_pos), false};
         }
       }
-    }
-    if (leaf->inner_node != nullptr) {
-      leaf->inner_node->insert(key, reinterpret_cast<char*>(payload));
     }
     stats_.num_inserts++;
     stats_.num_keys++;
@@ -2202,10 +2216,16 @@ class Alex {
   // Erases all keys with a certain key value
   int erase(const T& key) {
     data_node_type* leaf = get_leaf(key);
-    int num_erased = leaf->erase(key);
+
     if (leaf->inner_node != nullptr) {
       leaf->inner_node->erase(key);
+      if (leaf->is_cold()) {
+        // In the cold node, data has been removed from NVM
+        return -1;
+      }
     }
+
+    int num_erased = leaf->erase(key);
     stats_.num_keys -= num_erased;
     if (leaf->num_keys_ == 0) {
       merge(leaf, key);
