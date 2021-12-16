@@ -1,4 +1,11 @@
-#include "alex.h"
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+
+/*
+ * This short sample program demonstrates ALEX's API.
+ */
+
+#include "../core/alex.h"
 
 #define KEY_TYPE int
 #define PAYLOAD_TYPE int

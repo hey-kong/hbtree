@@ -1,4 +1,4 @@
-CXX = g++ -O0
+CXX = g++ -O2
 LDFLAGS = -pthread -lpmemobj -lpmem -lrt -lm -mpopcnt -mlzcnt -mbmi
 DEFS = -DSINGLE_BTREE -DNO_VALUE
 MULT_DEFS = -DNO_VALUE
@@ -21,6 +21,3 @@ clean:
 
 hbtree: alex_base.cc alex_fanout_tree.cc btree.cc nvm_allocator.cc inner_node.cc hbtree.cc test.cc
 	$(CXX) $(SING_CXXFLAGS) alex_base.cc alex_fanout_tree.cc btree.cc nvm_allocator.cc inner_node.cc hbtree.cc test.cc -o hbtree $(LDFLAGS)
-
-alex: alex_base.cc alex_fanout_tree.cc btree.cc nvm_allocator.cc inner_node.cc alex_test.cc
-	$(CXX) $(SING_CXXFLAGS) alex_base.cc alex_fanout_tree.cc btree.cc nvm_allocator.cc inner_node.cc alex_test.cc -o alex $(LDFLAGS)

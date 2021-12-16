@@ -8,7 +8,7 @@ struct HotDegreeCmp {
 
 HBTree::HBTree() {
   dummy_ = new InnerNode(INNERNODE);
-  InnerNode *node = new InnerNode(HOTNODE);
+  InnerNode *node = new InnerNode(DefaultNodeState);
   dummy_->next = node;
   node->prev = dummy_;
 

@@ -12,6 +12,8 @@
 #define OP_PERIOD 100
 #define HOT_NODE_NUM 1
 
+string DefaultNodeState = HOTNODE;
+
 class HBTree {
  public:
   alex::Alex<KEY_TYPE, PAYLOAD_TYPE> index_;

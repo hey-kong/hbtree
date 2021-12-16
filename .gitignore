@@ -37,3 +37,7 @@
 # Output
 src/alex
 src/hbtree
+
+# ALEX/FAST_FAIR
+ALEX_TEST/build
+FAST_FAIR_TEST/*/btree*
