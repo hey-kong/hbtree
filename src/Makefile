@@ -13,13 +13,9 @@ default:  all
 
 all: hbtree alex
 
-cfile:
-	rm -f /pmem0/data/*
-	rm -f /pmem0/log/*
-
 clean:
-	rm -f /pmem0/data/*
-	rm -f /pmem0/log/*
+	rm -f /mnt/pmem/data/*
+	rm -f /mnt/pmem/log/*
 	rm -f alex
 	rm -f hbtree
 

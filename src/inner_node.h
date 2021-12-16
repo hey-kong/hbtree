@@ -10,8 +10,8 @@
 #define INNERNODE "InnerNode"
 #define HOTNODE "HotNode"
 #define COLDNODE "ColdNode"
-#define BTREEPATH "/pmem0/data/"
-#define LOGPATH "/pmem0/log/"
+#define BTREEPATH "/mnt/pmem/data/"
+#define LOGPATH "/mnt/pmem/log/"
 #define LOGSIZE (24 << 10)
 #define DECAY 0.2
 
