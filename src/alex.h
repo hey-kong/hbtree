@@ -76,6 +76,8 @@ class Alex {
   AlexNode<T, P>* root_node_ = nullptr;
   model_node_type* superroot_ =
       nullptr;  // phantom node that is the root's parent
+  data_node_type* dummy_node_ =
+      nullptr;  // dummy node that is for traversing all data nodes
 
   /* User-changeable parameters */
   struct Params {
@@ -221,8 +223,14 @@ class Alex {
   }
 
   void InitRootNode(InnerNode* node) {
-    auto empty_data_node = (data_node_type*)root_node_;
+    // Connect inner node
+    auto empty_data_node = static_cast<data_node_type*>(root_node_);
     empty_data_node->inner_node = node;
+    // Init dummy data node
+    dummy_node_ = new (data_node_allocator().allocate(1))
+        data_node_type(key_less_, allocator_);
+    dummy_node_->next_leaf_ = empty_data_node;
+    empty_data_node->prev_leaf_ = dummy_node_;
   }
 
   Alex(const Compare& comp, const Alloc& alloc = Alloc())

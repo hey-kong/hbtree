@@ -35,8 +35,13 @@ int main() {
     printf("\n");
     cnt++;
   }
-  printf("alex datanode count: %d\n", hbtree->index_.stats_.num_data_nodes);
+  printf("alex data node count: %d\n", hbtree->index_.stats_.num_data_nodes);
   printf("inner node count: %d\n", cnt);
+  for (auto node = hbtree->index_.dummy_node_->next_leaf_; node != nullptr;
+       node = node->next_leaf_) {
+    printf("data node first: %d, data node last: %d\n", node->first_key(),
+           node->last_key());
+  }
 
   delete hbtree;
   return 0;

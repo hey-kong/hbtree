@@ -1,5 +1,7 @@
 #include "hbtree.h"
 
+string DefaultNodeState = HOTNODE;
+
 struct HotDegreeCmp {
   bool operator()(InnerNode *i, InnerNode *j) {
     return i->GetHotDegree() < j->GetHotDegree();

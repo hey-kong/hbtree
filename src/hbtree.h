@@ -12,7 +12,7 @@
 #define OP_PERIOD 100
 #define HOT_NODE_NUM 1
 
-string DefaultNodeState = HOTNODE;
+extern string DefaultNodeState;
 
 class HBTree {
  public:
