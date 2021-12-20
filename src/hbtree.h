@@ -5,10 +5,10 @@
 #include <map>
 
 #include "alex.h"
-#include "fixed_size_priority_queue.h"
 
 #define KEY_TYPE entry_key_t
 #define PAYLOAD_TYPE uint64_t
+
 #define OP_PERIOD 100
 #define HOT_NODE_NUM 1
 
@@ -23,10 +23,7 @@ class HBTree {
   HBTree();
   ~HBTree();
 
-  void Recycle();
-  void AdjustNodeType();
-  void SwitchToCold(InnerNode *node);
-  void SwitchToHot(InnerNode *node);
+  void SwitchInnerNode();
 
   void insert(KEY_TYPE, PAYLOAD_TYPE);
   void erase(KEY_TYPE);

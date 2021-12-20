@@ -39,6 +39,7 @@
 #include "alex_base.h"
 #include "alex_fanout_tree.h"
 #include "alex_nodes.h"
+#include "fixed_size_priority_queue.h"
 
 // Whether we account for floating-point precision issues when traversing down
 // ALEX.
@@ -194,6 +195,12 @@ class Alex {
     double split_cost = 0;
   };
 
+  struct HotDegreeCmp {
+    bool operator()(data_node_type* i, data_node_type* j) {
+      return i->inner_node->GetHotDegree() < j->inner_node->GetHotDegree();
+    }
+  };
+
   // At least this many keys must be outside the domain before a domain
   // expansion is triggered.
   static const int kMinOutOfDomainKeys = 5;
@@ -220,17 +227,6 @@ class Alex {
     root_node_ = empty_data_node;
     stats_.num_data_nodes++;
     create_superroot();
-  }
-
-  void InitRootNode(InnerNode* node) {
-    // Connect inner node
-    auto empty_data_node = static_cast<data_node_type*>(root_node_);
-    empty_data_node->inner_node = node;
-    // Init dummy data node
-    dummy_node_ = new (data_node_allocator().allocate(1))
-        data_node_type(key_less_, allocator_);
-    dummy_node_->next_leaf_ = empty_data_node;
-    empty_data_node->prev_leaf_ = dummy_node_;
   }
 
   Alex(const Compare& comp, const Alloc& alloc = Alloc())
@@ -260,6 +256,50 @@ class Alex {
       delete_node(node_it.current());
     }
     delete_node(superroot_);
+  }
+
+  void InitRootNode(InnerNode* node) {
+    // Connect inner node
+    auto empty_data_node = static_cast<data_node_type*>(root_node_);
+    empty_data_node->inner_node = node;
+    // Init dummy data nodea
+    dummy_node_ = new (data_node_allocator().allocate(1))
+        data_node_type(key_less_, allocator_);
+    dummy_node_->next_leaf_ = empty_data_node;
+    empty_data_node->prev_leaf_ = dummy_node_;
+  }
+
+  void AdjustNodeType(int hot_node_num) {
+    fixed_size_priority_queue<data_node_type*, HotDegreeCmp> q(hot_node_num);
+    for (auto node = dummy_node_->next_leaf_; node != nullptr;
+         node = node->next_leaf_) {
+      node->inner_node->UpdateHotDegree();
+      q.push(node);
+    }
+
+    // Record which nodes need to become hot node
+    map<uint16_t, bool> m;
+    for (auto i = q.begin(); i != q.end(); ++i) {
+      m[(*i)->inner_node->Id()] = true;
+    }
+    for (auto node = dummy_node_->next_leaf_; node != nullptr;
+         node = node->next_leaf_) {
+      if (m[node->inner_node->Id()]) {
+        if (node->is_cold()) {
+          // TODO: delete note
+          // node->switch_to_hot();
+          continue;
+        } else {
+          continue;
+        }
+      } else {
+        if (node->is_cold()) {
+          continue;
+        } else {
+          node->switch_to_cold();
+        }
+      }
+    }
   }
 
   // Initializes with range [first, last). The range does not need to be
@@ -642,7 +682,9 @@ class Alex {
       if (data_node->inner_node != nullptr) {
         data_node->inner_node->delete_node();
       }
-      data_node_allocator().destroy(static_cast<data_node_type*>(node));
+      if (!data_node->is_cold()) {
+        data_node_allocator().destroy(static_cast<data_node_type*>(node));
+      }
       data_node_allocator().deallocate(static_cast<data_node_type*>(node), 1);
     } else {
       model_node_allocator().destroy(static_cast<model_node_type*>(node));
@@ -2613,7 +2655,8 @@ class Alex {
    private:
     void initialize() {
       if (!cur_leaf_) return;
-      assert(cur_idx_ >= 0);
+      // For cold node, cur_idx_ is 0
+      // assert(cur_idx_ >= 0);
       if (cur_idx_ >= cur_leaf_->data_capacity_) {
         cur_leaf_ = cur_leaf_->next_leaf_;
         cur_idx_ = 0;

@@ -16,6 +16,7 @@ int main() {
   }
 
   sleep(3);  // Wait for logs to be applied to NVM
+  hbtree->SwitchInnerNode();
 
   char *value;
   for (int i = 0; i < 500; i += 10) {
@@ -26,8 +27,6 @@ int main() {
       printf("not found: key(%ld)\n", keys[i]);
     }
   }
-
-  hbtree->Recycle();
 
   int cnt = 0;
   for (auto node = hbtree->dummy_->next; node != nullptr; node = node->next) {

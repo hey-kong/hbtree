@@ -481,7 +481,6 @@ class AlexDataNode : public AlexNode<T, P> {
   bool is_cold() const { return is_cold_; }
 
   void switch_to_cold() {
-    is_cold = true;
     if (key_slots_ == nullptr) {
       return;
     }
