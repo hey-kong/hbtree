@@ -448,6 +448,9 @@ class AlexDataNode : public AlexNode<T, P> {
 
   // Check whether the position corresponds to a key (as opposed to a gap)
   inline bool check_exists(int pos) const {
+    if (is_cold()) {
+      return false;
+    }
     assert(pos >= 0 && pos < data_capacity_);
     int bitmap_pos = pos >> 6;
     int bit_pos = pos - (bitmap_pos << 6);
@@ -487,6 +490,8 @@ class AlexDataNode : public AlexNode<T, P> {
     key_allocator().deallocate(key_slots_, data_capacity_);
     payload_allocator().deallocate(payload_slots_, data_capacity_);
     bitmap_allocator().deallocate(bitmap_, bitmap_size_);
+    num_keys_ = 0;
+    inner_node->set_cold();
     is_cold_ = true;
   }
 
@@ -494,7 +499,9 @@ class AlexDataNode : public AlexNode<T, P> {
     // TODO: Wait for all logs to be applied, read from B+Tree
     reset_stats();
     // TODO: bulk_load may be useful only when the index is empty
-    bulk_load(values, num_keys, false, true);
+    bulk_load(values, num_keys, nullptr, true);
+    num_keys_ = num_keys;
+    inner_node->set_hot();
     is_cold_ = false;
   }
 

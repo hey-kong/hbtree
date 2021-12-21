@@ -15,6 +15,17 @@ int main() {
     hbtree->insert((KEY_TYPE)keys[i * 2 + 1], (PAYLOAD_TYPE)keys[i * 2 + 1]);
   }
 
+  for (int i = 0; i < 100; i++) {
+    hbtree->erase((KEY_TYPE)keys[i]);
+  }
+
+  sleep(3);  // Wait for logs to be applied to NVM
+  hbtree->SwitchInnerNode();
+
+  for (int i = 400; i < 450; i++) {
+    hbtree->insert((KEY_TYPE)keys[i], (PAYLOAD_TYPE)keys[i]);
+  }
+
   sleep(3);  // Wait for logs to be applied to NVM
   hbtree->SwitchInnerNode();
 
@@ -36,9 +47,9 @@ int main() {
   }
   printf("alex data node count: %d\n", hbtree->index_.stats_.num_data_nodes);
   printf("inner node count: %d\n", cnt);
-  for (auto node = hbtree->index_.dummy_node_->next_leaf_; node != nullptr;
+  for (auto node = hbtree->index_.first_data_node(); node != nullptr;
        node = node->next_leaf_) {
-    printf("data node first: %d, data node last: %d\n", node->first_key(),
+    printf("data node first: %ld, data node last: %ld\n", node->first_key(),
            node->last_key());
   }
 

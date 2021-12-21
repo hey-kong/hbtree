@@ -58,7 +58,15 @@ InnerNode::~InnerNode() {
   }
 }
 
+void InnerNode::UpdateHotDegree() {
+  hot_degree_ = DECAY * hot_degree_ + op_;
+  op_ = 0;
+}
+
+double InnerNode::GetHotDegree() { return hot_degree_; }
+
 void InnerNode::insert(entry_key_t key, char *value) {
+  op_++;
   if (this->type() == HOTNODE) {
     log_->Write(key, value);
   } else {
@@ -68,6 +76,7 @@ void InnerNode::insert(entry_key_t key, char *value) {
 }
 
 void InnerNode::erase(entry_key_t key) {
+  op_++;
   if (this->type() == HOTNODE) {
     log_->Delete(key);
   } else {
@@ -77,9 +86,11 @@ void InnerNode::erase(entry_key_t key) {
 }
 
 char *InnerNode::search(entry_key_t key) {
+  op_++;
   return D_RW(bt_)->btree_search(key);
 }
 
+// Split the current inner node, new inner node key range is [min, max]
 InnerNode *InnerNode::split(entry_key_t min, entry_key_t max) {
   auto new_node = new InnerNode(HOTNODE);
   auto next_node = this->next;

@@ -31,7 +31,6 @@ class InnerNode {
   int op_;
   double hot_degree_;
   const char *persistent_path_;
-  TOID(btree) bt_;
   PMEMobjpool *pop_;
   string type_;
 
@@ -40,20 +39,22 @@ class InnerNode {
   NVMLogFile *log_;
 
  public:
+  TOID(btree) bt_;
   InnerNode *prev;
   InnerNode *next;
 
   InnerNode(string);
-
   ~InnerNode();
 
   uint64_t Id() { return this->id_; }
   string type() { return this->type_; }
   void delete_node() { this->to_be_recycled_ = true; }
   bool to_be_recycled() { return this->to_be_recycled_; }
+  void set_hot() { type_ = HOTNODE; }
+  void set_cold() { type_ = COLDNODE; }
 
-  void UpdateHotDegree() { hot_degree_ = DECAY * hot_degree_ + op_; }
-  double GetHotDegree() { return hot_degree_; }
+  void UpdateHotDegree();
+  double GetHotDegree();
 
   void insert(entry_key_t, char *);
   void erase(entry_key_t);

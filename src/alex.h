@@ -77,8 +77,6 @@ class Alex {
   AlexNode<T, P>* root_node_ = nullptr;
   model_node_type* superroot_ =
       nullptr;  // phantom node that is the root's parent
-  data_node_type* dummy_node_ =
-      nullptr;  // dummy node that is for traversing all data nodes
 
   /* User-changeable parameters */
   struct Params {
@@ -262,16 +260,18 @@ class Alex {
     // Connect inner node
     auto empty_data_node = static_cast<data_node_type*>(root_node_);
     empty_data_node->inner_node = node;
-    // Init dummy data nodea
-    dummy_node_ = new (data_node_allocator().allocate(1))
-        data_node_type(key_less_, allocator_);
-    dummy_node_->next_leaf_ = empty_data_node;
-    empty_data_node->prev_leaf_ = dummy_node_;
   }
 
   void AdjustNodeType(int hot_node_num) {
+    auto first_node = first_data_node();
+    auto last_node = last_data_node();
+    // First data node and last data node must be hot node
+    if (first_node == last_node || first_node->next_leaf_ == last_node) {
+      return;
+    }
+
     fixed_size_priority_queue<data_node_type*, HotDegreeCmp> q(hot_node_num);
-    for (auto node = dummy_node_->next_leaf_; node != nullptr;
+    for (auto node = first_node->next_leaf_; node != last_node;
          node = node->next_leaf_) {
       node->inner_node->UpdateHotDegree();
       q.push(node);
@@ -282,13 +282,23 @@ class Alex {
     for (auto i = q.begin(); i != q.end(); ++i) {
       m[(*i)->inner_node->Id()] = true;
     }
-    for (auto node = dummy_node_->next_leaf_; node != nullptr;
+    for (auto node = first_node->next_leaf_; node != last_node;
          node = node->next_leaf_) {
       if (m[node->inner_node->Id()]) {
         if (node->is_cold()) {
-          // TODO: delete note
-          // node->switch_to_hot();
-          continue;
+          int num_keys = 0;
+          entry_key_t keys[BTREEITEMS];
+          unsigned long vals[BTREEITEMS];
+          D_RW(node->inner_node->bt_)
+              ->btree_search_range(std::numeric_limits<entry_key_t>::lowest(),
+                                   std::numeric_limits<entry_key_t>::max(),
+                                   keys, vals, num_keys);
+          V values[num_keys];
+          for (int i = 0; i < num_keys; i++) {
+            values[i].first = keys[i];
+            values[i].second = vals[i];
+          }
+          node->switch_to_hot(values, num_keys);
         } else {
           continue;
         }
@@ -300,6 +310,27 @@ class Alex {
         }
       }
     }
+  }
+
+  // Return left-most data node
+  data_node_type* first_data_node() const {
+    AlexNode<T, P>* cur = root_node_;
+
+    while (!cur->is_leaf_) {
+      cur = static_cast<model_node_type*>(cur)->children_[0];
+    }
+    return static_cast<data_node_type*>(cur);
+  }
+
+  // Return right-most data node
+  data_node_type* last_data_node() const {
+    AlexNode<T, P>* cur = root_node_;
+
+    while (!cur->is_leaf_) {
+      auto node = static_cast<model_node_type*>(cur);
+      cur = node->children_[node->num_children_ - 1];
+    }
+    return static_cast<data_node_type*>(cur);
   }
 
   // Initializes with range [first, last). The range does not need to be
@@ -591,27 +622,6 @@ class Alex {
         tn.bucketID = end_bucketID;
       }
     }
-  }
-
-  // Return left-most data node
-  data_node_type* first_data_node() const {
-    AlexNode<T, P>* cur = root_node_;
-
-    while (!cur->is_leaf_) {
-      cur = static_cast<model_node_type*>(cur)->children_[0];
-    }
-    return static_cast<data_node_type*>(cur);
-  }
-
-  // Return right-most data node
-  data_node_type* last_data_node() const {
-    AlexNode<T, P>* cur = root_node_;
-
-    while (!cur->is_leaf_) {
-      auto node = static_cast<model_node_type*>(cur);
-      cur = node->children_[node->num_children_ - 1];
-    }
-    return static_cast<data_node_type*>(cur);
   }
 
   // Returns minimum key in the index
@@ -1835,7 +1845,7 @@ class Alex {
         old_node->prev_leaf_;  // used for linking the new data nodes
     int left_boundary = 0;
     int right_boundary = 0;
-    std::vector<T> left_boundaries;
+    std::vector<int> left_boundaries;
     // Keys may be re-assigned to an adjacent fanout tree node due to off-by-one
     // errors
     int num_reassigned_keys = 0;
@@ -1891,11 +1901,12 @@ class Alex {
     auto old_inner_node = old_node->inner_node;
     int right_key = old_node->last_key();
     for (int i = left_boundaries.size() - 1; i >= 0; i--) {
-      auto new_inner_node = old_inner_node->split(
-          old_node->get_key(left_boundaries[i]), right_key);
+      int left_boundary = left_boundaries[i];
+      int left_key = old_node->get_key(left_boundary);
+      auto new_inner_node = old_inner_node->split(left_key, right_key);
       prev_leaf->inner_node = new_inner_node;
       prev_leaf = prev_leaf->prev_leaf_;
-      right_key = old_node->get_key(left_boundaries[i] - 1);
+      right_key = old_node->get_key(left_boundary - 1);
     }
   }
 
@@ -2655,8 +2666,11 @@ class Alex {
    private:
     void initialize() {
       if (!cur_leaf_) return;
-      // For cold node, cur_idx_ is 0
-      // assert(cur_idx_ >= 0);
+      assert(cur_idx_ >= -1);
+      // For cold node, cur_idx_ is -1
+      if (cur_idx_ == -1) {
+        return;
+      }
       if (cur_idx_ >= cur_leaf_->data_capacity_) {
         cur_leaf_ = cur_leaf_->next_leaf_;
         cur_idx_ = 0;

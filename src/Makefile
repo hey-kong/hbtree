@@ -1,4 +1,4 @@
-CXX = g++ -O2
+CXX = g++ -O0
 LDFLAGS = -pthread -lpmemobj -lpmem -lrt -lm -mpopcnt -mlzcnt -mbmi
 DEFS = -DSINGLE_BTREE -DNO_VALUE
 MULT_DEFS = -DNO_VALUE
