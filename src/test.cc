@@ -26,8 +26,11 @@ int main() {
     hbtree->insert((KEY_TYPE)keys[i], (PAYLOAD_TYPE)keys[i]);
   }
 
-  sleep(3);  // Wait for logs to be applied to NVM
-  hbtree->SwitchInnerNode();
+  for (int i = 0; i < 50; i++) {
+    hbtree->insert((KEY_TYPE)keys[i], (PAYLOAD_TYPE)keys[i]);
+  }
+
+  sleep(2);  // Wait for logs to be applied to NVM
 
   char *value;
   for (int i = 0; i < 500; i += 10) {

@@ -22,12 +22,13 @@ void NVMLogFile::worker() {
       entry_key_t keys[BTREEITEMS];
       unsigned long vals[BTREEITEMS];
       D_RW(bt_)->btree_search_range(tmp->key, tmp->value, keys, vals, cnt);
+      // Here we get the new inner node address
+      InnerNode *new_node = reinterpret_cast<InnerNode *>(tmp->type);
       {
+        // Insert a batch of data into the new node
         unique_lock<mutex> lck(split_mut_);
-        // Here we get the new inner node address, and insert a batch of data into the new node
-        InnerNode *new_node = reinterpret_cast<InnerNode *>(tmp->type);
         for (int i = 0; i < cnt; i++) {
-          // Since only hot nodes split, only writing logs is required in this call
+          // Since only hot nodes split, writing logs is required in this call
           new_node->insert(keys[i], (char *)vals[i]);
         }
         split_ = true;
