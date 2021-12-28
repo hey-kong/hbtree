@@ -1634,6 +1634,16 @@ class Alex {
           static_cast<data_node_type*>(root->children_[new_nodes_end - 1]);
       outermost_node->prev_leaf_ = last_new_leaf;
       last_new_leaf->next_leaf_ = outermost_node;
+      // Update InnerNode
+      auto old_inner_node = outermost_node->inner_node;
+      auto first_node = first_data_node();
+      for (auto node = outermost_node; node != first_node;
+           node = node->prev_leaf_) {
+        auto new_inner_node =
+            old_inner_node->split(node->first_key(), node->last_key());
+        node->inner_node = new_inner_node;
+      }
+      first_node->inner_node = old_inner_node;
     } else {
       outermost_node->erase_range(istats_.key_domain_max_, new_domain_max,
                                   true);
@@ -1641,6 +1651,14 @@ class Alex {
           static_cast<data_node_type*>(root->children_[new_nodes_start]);
       outermost_node->next_leaf_ = first_new_leaf;
       first_new_leaf->prev_leaf_ = outermost_node;
+      // Update InnerNode
+      for (auto node = last_data_node(); node != outermost_node;
+           node = node->prev_leaf_) {
+        auto old_inner_node = outermost_node->inner_node;
+        auto new_inner_node =
+            old_inner_node->split(node->first_key(), node->last_key());
+        node->inner_node = new_inner_node;
+      }
     }
 
     istats_.key_domain_min_ = new_domain_min;
@@ -1814,8 +1832,8 @@ class Alex {
     link_data_nodes(old_node, left_leaf, right_leaf);
     // Update InnerNode
     auto old_inner_node = old_node->inner_node;
-    auto new_inner_node = old_inner_node->split(
-        old_node->get_key(right_boundary), old_node->last_key());
+    auto new_inner_node =
+        old_inner_node->split(right_leaf->first_key(), right_leaf->last_key());
     left_leaf->inner_node = old_inner_node;
     right_leaf->inner_node = new_inner_node;
   }
@@ -1845,7 +1863,7 @@ class Alex {
         old_node->prev_leaf_;  // used for linking the new data nodes
     int left_boundary = 0;
     int right_boundary = 0;
-    std::vector<int> left_boundaries;
+    int new_node_cnt = 0;
     // Keys may be re-assigned to an adjacent fanout tree node due to off-by-one
     // errors
     int num_reassigned_keys = 0;
@@ -1876,7 +1894,7 @@ class Alex {
       data_node_type* child_node = bulk_load_leaf_node_from_existing(
           old_node, left_boundary, right_boundary, false, &tree_node, false,
           keep_left, keep_right);
-      left_boundaries.push_back(left_boundary);
+      new_node_cnt++;
       child_node->level_ = static_cast<short>(parent->level_ + 1);
       child_node->cost_ = tree_node.cost;
       child_node->duplication_factor_ = duplication_factor;
@@ -1899,14 +1917,11 @@ class Alex {
     }
     // Update InnerNode
     auto old_inner_node = old_node->inner_node;
-    int right_key = old_node->last_key();
-    for (int i = left_boundaries.size() - 1; i >= 0; i--) {
-      int left_boundary = left_boundaries[i];
-      int left_key = old_node->get_key(left_boundary);
-      auto new_inner_node = old_inner_node->split(left_key, right_key);
+    for (int i = 0; i < new_node_cnt; i++) {
+      auto new_inner_node =
+          old_inner_node->split(prev_leaf->first_key(), prev_leaf->last_key());
       prev_leaf->inner_node = new_inner_node;
       prev_leaf = prev_leaf->prev_leaf_;
-      right_key = old_node->get_key(left_boundary - 1);
     }
   }
 

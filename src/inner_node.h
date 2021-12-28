@@ -1,7 +1,6 @@
 #ifndef _INNER_NODE_H_
 #define _INNER_NODE_H_
 
-#include <atomic>
 #include <map>
 
 #include "btree.h"

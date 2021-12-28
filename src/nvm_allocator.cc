@@ -7,8 +7,11 @@ void NVMLogFile::worker() {
     if (IsFoot(apply_addr_)) {
       apply_addr_ = pmem_addr_;
     }
-    while (memory_used_.load() == 0) {
+    while (memory_used_.load() == 0 && !finished) {
       // Wait for memory_used_ to update
+    }
+    if (memory_used_.load() == 0 && finished) {
+      break;
     }
 
     LogNode *tmp = (LogNode *)malloc(LOGNODEBYTES);
