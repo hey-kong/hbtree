@@ -15,15 +15,22 @@ int main() {
     hbtree->insert((KEY_TYPE)keys[i * 2 + 1], (PAYLOAD_TYPE)keys[i * 2 + 1]);
   }
 
-  sleep(3);  // Wait for logs to be applied to NVM
-  hbtree->SwitchInnerNode();
+  sleep(3);                   // wait for logs to be applied to NVM
+  hbtree->SwitchInnerNode();  // check hot node
 
   for (int i = 400; i < 450; i++) {
     hbtree->insert((KEY_TYPE)keys[i], (PAYLOAD_TYPE)keys[i]);
   }
 
-  sleep(1);  // Wait for logs to be applied to NVM
-  hbtree->SwitchInnerNode();
+  sleep(1);                   // wait for logs to be applied to NVM
+  hbtree->SwitchInnerNode();  // check hot node
+
+  for (int i = 200; i < 250; i++) {
+    hbtree->insert((KEY_TYPE)keys[i], (PAYLOAD_TYPE)keys[i] * 10);
+  }
+
+  sleep(1);                   // wait for logs to be applied to NVM
+  hbtree->SwitchInnerNode();  // check hot node
 
   char *value;
   for (int i = 0; i < 500; i += 10) {
